@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nueva Solicitud – Novum GLP</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="app-sidebar"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div><h1>Nueva Solicitud</h1><div class="breadcrumb">Crear requerimiento de materiales</div></div>
+    </div>
+    <div class="page-content">
+      <div class="card" style="max-width:900px">
+        <form id="form-solicitud">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Línea de Producción <span class="required">*</span></label>
+              <select id="linea" class="form-control" required>
+                <option value="">Seleccionar línea...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fecha Requerida <span class="required">*</span></label>
+              <input type="date" id="fecha-requerida" class="form-control" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Observaciones</label>
+            <textarea id="observaciones" class="form-control" placeholder="Ej: Lote urgente para producción semanal..."></textarea>
+          </div>
+
+          <hr class="divider">
+          <div class="flex justify-between items-center mb-4">
+            <div class="card-title">Materiales a Solicitar</div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-agregar-item">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              Agregar Material
+            </button>
+          </div>
+
+          <div class="items-table-container">
+            <div class="item-row item-row-header">
+              <span>Material</span><span>Cantidad</span><span>Precio Unit.</span><span>Subtotal</span><span></span>
+            </div>
+            <div id="items-container"></div>
+          </div>
+
+          <div style="text-align:right;margin-top:12px;font-size:16px;font-weight:700">
+            Total Estimado: <span id="total-solicitud">$0.00</span>
+          </div>
+
+          <div class="flex gap-2 mt-4" style="justify-content:flex-end">
+            <a href="/solicitudes.html" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary" id="btn-submit">Enviar Solicitud</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+// ── Estado global ─────────────────────────────────────────────────────────────
+let materiales = [];
+let itemCount = 0;
+
+// ── Funciones globales ────────────────────────────────────────────────────────
+
+function buildMaterialOptions() {
+  const grupos = { produccion: [], epps: [], mantenimiento: [] };
+  materiales.forEach(m => { if (grupos[m.categoria]) grupos[m.categoria].push(m); });
+  const catLabel = { produccion: "— PRODUCCIÓN —", epps: "— EPPs —", mantenimiento: "— MANTENIMIENTO —" };
+  let html = '<option value="">Seleccionar material...</option>';
+  for (const [cat, items] of Object.entries(grupos)) {
+    if (!items.length) continue;
+    html += `<optgroup label="${catLabel[cat]}">`;
+    html += items.map(m =>
+      `<option value="${m.id}" data-precio="${m.precio_unitario}" data-unidad="${m.unidad_medida}">${m.codigo} – ${m.nombre} (${m.unidad_medida})</option>`
+    ).join("");
+    html += `</optgroup>`;
+  }
+  return html;
+}
+
+function agregarItem() {
+  itemCount++;
+  const id = `item-${itemCount}`;
+  const div = document.createElement("div");
+  div.className = "item-row";
+  div.id = id;
+  div.innerHTML = `
+    <select class="form-control item-material" onchange="onMaterialChange('${id}')">
+      ${buildMaterialOptions()}
+    </select>
+    <input type="number" class="form-control item-cantidad" min="0.01" step="0.01" placeholder="0" oninput="recalcularItem('${id}')">
+    <span class="item-precio text-muted">—</span>
+    <span class="item-subtotal font-semibold">$0.00</span>
+    <button type="button" class="btn btn-danger btn-icon btn-sm" onclick="eliminarItem('${id}')">✕</button>
+  `;
+  document.getElementById("items-container").appendChild(div);
+}
+
+function onMaterialChange(id) {
+  const row = document.getElementById(id);
+  if (!row) return;
+  const sel = row.querySelector(".item-material");
+  const opt = sel.selectedOptions[0];
+  const precio = parseFloat(opt.dataset.precio || 0);
+  row.querySelector(".item-precio").textContent = precio > 0 ? fmtMoney(precio) : "—";
+  recalcularItem(id);
+}
+
+function recalcularItem(id) {
+  const row = document.getElementById(id);
+  if (!row) return;
+  const precio = parseFloat(row.querySelector(".item-material").selectedOptions[0].dataset.precio || 0);
+  const cant = parseFloat(row.querySelector(".item-cantidad").value || 0);
+  row.querySelector(".item-subtotal").textContent = fmtMoney(precio * cant);
+  recalcularTotal();
+}
+
+function recalcularTotal() {
+  let total = 0;
+  document.querySelectorAll(".item-row:not(.item-row-header)").forEach(row => {
+    const precio = parseFloat(row.querySelector(".item-material").selectedOptions[0].dataset.precio || 0);
+    const cant = parseFloat(row.querySelector(".item-cantidad").value || 0);
+    total += precio * cant;
+  });
+  document.getElementById("total-solicitud").textContent = fmtMoney(total);
+}
+
+function eliminarItem(id) {
+  document.getElementById(id)?.remove();
+  recalcularTotal();
+}
+
+// ── Inicialización ────────────────────────────────────────────────────────────
+const user = requireAuth(["solicitante"]);
+if (user) {
+  renderSidebar("nueva-solicitud");
+
+  async function init() {
+    try {
+      const [lineas, mats] = await Promise.all([
+        apiFetch("/api/lineas/"),
+        apiFetch("/api/materiales/"),
+      ]);
+      const sel = document.getElementById("linea");
+      lineas.forEach(l => {
+        const o = document.createElement("option");
+        o.value = l.id;
+        o.textContent = l.nombre;
+        sel.appendChild(o);
+      });
+      materiales = mats;
+      agregarItem(); // agregar primera fila vacía después de tener materiales
+    } catch (err) {
+      showToast("Error cargando datos: " + err.message, "error");
+    }
+  }
+
+  document.getElementById("btn-agregar-item").addEventListener("click", agregarItem);
+
+  document.getElementById("form-solicitud").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("btn-submit");
+    btn.disabled = true;
+    btn.textContent = "Enviando...";
+
+    const items = [];
+    let valido = true;
+    document.querySelectorAll(".item-row:not(.item-row-header)").forEach(row => {
+      const matId = parseInt(row.querySelector(".item-material").value);
+      const cant = parseFloat(row.querySelector(".item-cantidad").value);
+      if (!matId || !cant || cant <= 0) { valido = false; return; }
+      items.push({ material_id: matId, cantidad_solicitada: cant });
+    });
+
+    if (!valido || !items.length) {
+      showToast("Agrega al menos un material con cantidad válida", "error");
+      btn.disabled = false;
+      btn.textContent = "Enviar Solicitud";
+      return;
+    }
+
+    try {
+      await apiFetch("/api/solicitudes/", {
+        method: "POST",
+        body: JSON.stringify({
+          linea_produccion_id: parseInt(document.getElementById("linea").value),
+          fecha_requerida: document.getElementById("fecha-requerida").value + "T00:00:00",
+          observaciones: document.getElementById("observaciones").value || null,
+          items,
+        }),
+      });
+      showToast("Solicitud enviada correctamente", "success");
+      setTimeout(() => window.location.href = "/solicitudes.html", 1200);
+    } catch (err) {
+      showToast("Error: " + err.message, "error");
+      btn.disabled = false;
+      btn.textContent = "Enviar Solicitud";
+    }
+  });
+
+  document.getElementById("fecha-requerida").min = new Date().toISOString().split("T")[0];
+  init();
+}
+</script>
+</body>
+</html>

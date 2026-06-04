@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alertas de Stock – Novum GLP</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="app-sidebar"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div><h1>Alertas de Stock</h1><div class="breadcrumb">Materiales con niveles de inventario críticos</div></div>
+      <div class="flex gap-2">
+        <label class="flex items-center gap-2" style="font-size:13px;cursor:pointer">
+          <input type="checkbox" id="mostrar-inactivas"> Mostrar resueltas
+        </label>
+        <button class="btn btn-secondary btn-sm" onclick="loadAlertas()">Actualizar</button>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Material</th><th>Tipo</th><th>Mensaje</th><th>Stock Actual</th><th>Stock Mín.</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr>
+            </thead>
+            <tbody id="alertas-tbody">
+              <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+// ── Funciones globales ────────────────────────────────────────────────────────
+
+async function loadAlertas() {
+  const soloActivas = !document.getElementById("mostrar-inactivas").checked;
+  const tbody = document.getElementById("alertas-tbody");
+  try {
+    const data = await apiFetch(`/api/alertas/?solo_activas=${soloActivas}`);
+    if (!data.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>${soloActivas ? "No hay alertas activas. El inventario está en buen estado." : "No hay alertas registradas."}</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(a => `
+      <tr>
+        <td style="font-weight:600">${a.material_nombre}</td>
+        <td><span class="badge ${a.tipo === 'sin_stock' ? 'badge-rechazada' : 'badge-pendiente'}">${a.tipo === 'sin_stock' ? 'Sin Stock' : 'Stock Bajo'}</span></td>
+        <td style="font-size:12px;color:var(--gray-600)">${a.mensaje}</td>
+        <td>${a.stock_actual}</td>
+        <td>${a.stock_minimo}</td>
+        <td><span class="badge ${a.activa ? 'badge-pendiente' : 'badge-entregada'}">${a.activa ? 'Activa' : 'Resuelta'}</span></td>
+        <td>${fmtDate(a.created_at)}</td>
+        <td>
+          ${a.activa ? `<button class="btn btn-secondary btn-sm" onclick="resolver(${a.id})">Resolver</button>` : "—"}
+        </td>
+      </tr>`).join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center">Error: ${err.message}</td></tr>`;
+  }
+}
+
+async function resolver(id) {
+  if (!confirm("¿Marcar esta alerta como resuelta? Se reactivará automáticamente si el stock vuelve a bajar del mínimo.")) return;
+  try {
+    await apiFetch(`/api/alertas/${id}/resolver`, { method: "POST" });
+    showToast("Alerta resuelta", "success");
+    loadAlertas();
+  } catch (err) {
+    showToast("Error: " + err.message, "error");
+  }
+}
+
+// ── Inicialización ────────────────────────────────────────────────────────────
+const user = requireAuth(["coordinador", "bodeguero"]);
+if (user) {
+  renderSidebar("alertas");
+  document.getElementById("mostrar-inactivas").addEventListener("change", loadAlertas);
+  loadAlertas();
+}
+</script>
+</body>
+</html>

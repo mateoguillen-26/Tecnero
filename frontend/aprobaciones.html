@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aprobaciones – Novum GLP</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="app-sidebar"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div><h1>Aprobaciones</h1><div class="breadcrumb">Gestionar solicitudes pendientes de aprobación</div></div>
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Solicitante</th><th>Línea de Producción</th><th>Fecha Req.</th><th>Ítems</th><th>Total Est.</th><th>Recibida</th><th>Acciones</th></tr>
+            </thead>
+            <tbody id="apr-tbody">
+              <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal aprobación -->
+<div class="modal-overlay hidden" id="modal-apr">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Procesar Solicitud</span>
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+// ── Estado global ─────────────────────────────────────────────────────────────
+let solicitudActual = null;
+
+// ── Funciones globales ────────────────────────────────────────────────────────
+
+function cerrarModal() {
+  document.getElementById("modal-apr").classList.add("hidden");
+  solicitudActual = null;
+}
+
+async function loadPendientes() {
+  const tbody = document.getElementById("apr-tbody");
+  try {
+    const data = await apiFetch("/api/aprobaciones/pendientes");
+    if (!data.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>No hay solicitudes pendientes de aprobación.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(s => `
+      <tr>
+        <td style="font-weight:600">#${s.id}</td>
+        <td>${s.solicitante_nombre}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.linea_produccion_nombre}">${s.linea_produccion_nombre}</td>
+        <td>${fmtDate(s.fecha_requerida)}</td>
+        <td>${s.num_items}</td>
+        <td style="font-weight:600">${fmtMoney(s.total)}</td>
+        <td>${fmtDate(s.created_at)}</td>
+        <td><button class="btn btn-primary btn-sm" onclick="abrirAprobacion(${s.id})">Revisar</button></td>
+      </tr>`).join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center">Error: ${err.message}</td></tr>`;
+  }
+}
+
+async function abrirAprobacion(id) {
+  const body = document.getElementById("modal-body");
+  body.innerHTML = "<p class='text-muted'>Cargando...</p>";
+  document.getElementById("modal-footer").innerHTML = "";
+  document.getElementById("modal-apr").classList.remove("hidden");
+  try {
+    const s = await apiFetch(`/api/solicitudes/${id}`);
+    solicitudActual = s;
+    document.getElementById("modal-title").textContent = `Solicitud #${s.id} – ${s.solicitante_nombre}`;
+    body.innerHTML = `
+      <div class="form-row" style="margin-bottom:12px">
+        <div><div class="form-label">Línea de Producción</div><p>${s.linea_produccion_nombre}</p></div>
+        <div><div class="form-label">Fecha Requerida</div><p>${fmtDate(s.fecha_requerida)}</p></div>
+      </div>
+      ${s.observaciones ? `<div class="form-group"><div class="form-label">Observaciones del solicitante</div><p style="color:#374151">${s.observaciones}</p></div>` : ""}
+      <hr class="divider">
+      <div class="form-label" style="margin-bottom:8px">Materiales — Ajustar cantidades aprobadas si es necesario</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Código</th><th>Material</th><th>Cant. Solicitada</th><th>Cant. Aprobada</th><th>Precio Unit.</th><th>Subtotal</th></tr></thead>
+          <tbody>
+            ${s.detalles.map(d => `
+              <tr>
+                <td><code style="font-size:11px;background:var(--gray-100);padding:2px 5px;border-radius:3px">${d.material_codigo || "—"}</code></td>
+                <td>${d.material_nombre} <span class="text-muted text-sm">(${d.material_unidad})</span></td>
+                <td>${d.cantidad_solicitada}</td>
+                <td><input type="number" class="form-control" style="width:90px" id="apr-${d.id}" value="${d.cantidad_solicitada}" min="0" step="0.01" oninput="recalcSubtotal(${d.id}, ${d.precio_unitario_snapshot})"></td>
+                <td>${fmtMoney(d.precio_unitario_snapshot)}</td>
+                <td id="sub-${d.id}" style="font-weight:600">${fmtMoney(d.cantidad_solicitada * d.precio_unitario_snapshot)}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <hr class="divider">
+      <div class="form-group">
+        <label class="form-label">Comentario (opcional)</label>
+        <textarea id="comentario-apr" class="form-control" placeholder="Motivo de aprobación o ajuste..."></textarea>
+      </div>
+    `;
+    document.getElementById("modal-footer").innerHTML = `
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-danger" onclick="procesar('rechazar')">Rechazar</button>
+      <button class="btn btn-success" onclick="procesar('aprobar')">Aprobar</button>
+    `;
+  } catch (err) {
+    body.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+  }
+}
+
+function recalcSubtotal(detalleId, precio) {
+  const cant = parseFloat(document.getElementById(`apr-${detalleId}`)?.value || 0);
+  const el = document.getElementById(`sub-${detalleId}`);
+  if (el) el.textContent = fmtMoney(cant * precio);
+}
+
+async function procesar(accion) {
+  if (!solicitudActual) return;
+  const comentario = document.getElementById("comentario-apr")?.value || null;
+  let items = null;
+  if (accion === "aprobar") {
+    items = solicitudActual.detalles.map(d => ({
+      detalle_id: d.id,
+      cantidad_aprobada: parseFloat(document.getElementById(`apr-${d.id}`)?.value ?? d.cantidad_solicitada),
+    }));
+  }
+  try {
+    await apiFetch(`/api/aprobaciones/${solicitudActual.id}`, {
+      method: "POST",
+      body: JSON.stringify({ accion, comentario, items }),
+    });
+    showToast(`Solicitud ${accion === "aprobar" ? "aprobada" : "rechazada"} correctamente`, "success");
+    cerrarModal();
+    loadPendientes();
+  } catch (err) {
+    showToast("Error: " + err.message, "error");
+  }
+}
+
+// ── Inicialización ────────────────────────────────────────────────────────────
+const user = requireAuth(["coordinador"]);
+if (user) {
+  renderSidebar("aprobaciones");
+  loadPendientes();
+}
+</script>
+</body>
+</html>

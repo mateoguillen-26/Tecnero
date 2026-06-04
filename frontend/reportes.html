@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reportes – Novum GLP</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .report-tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--gray-200); margin-bottom: 20px; }
+    .tab-btn { padding: 8px 20px; border: none; background: none; cursor: pointer; font-size: 14px; color: var(--gray-500); border-bottom: 2px solid transparent; margin-bottom: -2px; font-weight: 500; }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    @media print { .report-tabs, .topbar, .sidebar, .no-print { display: none !important; } .main-content { margin-left: 0 !important; } }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="app-sidebar"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div><h1>Reportes</h1><div class="breadcrumb">Análisis de consumo y estado de inventario</div></div>
+      <button class="btn btn-secondary no-print" onclick="window.print()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+        Imprimir
+      </button>
+    </div>
+    <div class="page-content">
+      <div class="report-tabs no-print">
+        <button class="tab-btn active" onclick="switchTab('lineas', this)">Por Línea de Producción</button>
+        <button class="tab-btn" onclick="switchTab('material', this)">Por Material</button>
+        <button class="tab-btn" onclick="switchTab('inventario', this)">Inventario Actual</button>
+      </div>
+
+      <!-- Tab: Por línea -->
+      <div class="tab-panel active" id="tab-lineas">
+        <div class="card mb-4 no-print">
+          <div class="flex gap-2 items-center" style="flex-wrap:wrap">
+            <label class="form-label" style="margin:0;white-space:nowrap">Rango de fechas:</label>
+            <input type="date" id="lineas-inicio" class="form-control" style="width:150px">
+            <span class="text-muted">a</span>
+            <input type="date" id="lineas-fin" class="form-control" style="width:150px">
+            <button class="btn btn-primary btn-sm" onclick="loadReporteLineas()">Generar</button>
+          </div>
+        </div>
+        <div id="reporte-lineas"></div>
+      </div>
+
+      <!-- Tab: Por material -->
+      <div class="tab-panel" id="tab-material">
+        <div class="card mb-4 no-print">
+          <div class="flex gap-2 items-center" style="flex-wrap:wrap">
+            <label class="form-label" style="margin:0;white-space:nowrap">Material:</label>
+            <select id="mat-select" class="form-control" style="width:300px"></select>
+            <input type="date" id="mat-inicio" class="form-control" style="width:150px">
+            <span class="text-muted">a</span>
+            <input type="date" id="mat-fin" class="form-control" style="width:150px">
+            <button class="btn btn-primary btn-sm" onclick="loadReporteMaterial()">Generar</button>
+          </div>
+        </div>
+        <div id="reporte-material"></div>
+      </div>
+
+      <!-- Tab: Inventario -->
+      <div class="tab-panel" id="tab-inventario">
+        <div id="reporte-inventario">
+          <p class="text-muted text-sm">Haz clic en la pestaña para cargar el inventario.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+// ── Funciones globales ────────────────────────────────────────────────────────
+
+function switchTab(name, btn) {
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+  if (btn) btn.classList.add("active");
+  if (name === "inventario") loadInventario();
+}
+
+function setDefaults() {
+  const now = new Date();
+  const inicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+  const fin = now.toISOString().split("T")[0];
+  document.getElementById("lineas-inicio").value = inicio;
+  document.getElementById("lineas-fin").value = fin;
+  document.getElementById("mat-inicio").value = inicio;
+  document.getElementById("mat-fin").value = fin;
+}
+
+async function loadReporteLineas() {
+  const container = document.getElementById("reporte-lineas");
+  container.innerHTML = "<p class='text-muted'>Generando reporte...</p>";
+  const fi = document.getElementById("lineas-inicio").value;
+  const ff = document.getElementById("lineas-fin").value;
+  try {
+    const data = await apiFetch(`/api/reportes/lineas?fecha_inicio=${fi}&fecha_fin=${ff}`);
+    if (!data.lineas.length) {
+      container.innerHTML = "<p class='text-muted'>Sin datos en el período seleccionado.</p>";
+      return;
+    }
+    container.innerHTML = `
+      <div class="card mb-4">
+        <div class="card-title" style="margin-bottom:4px">Gasto por Línea de Producción</div>
+        <div class="text-muted text-sm" style="margin-bottom:16px">Del ${fi} al ${ff} · Total: ${fmtMoney(data.total_general)}</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Línea de Producción</th><th>Total</th><th>% del Total</th></tr></thead>
+            <tbody>
+              ${data.lineas.map(l => `<tr><td style="font-weight:600">${l.linea}</td><td>${fmtMoney(l.total)}</td><td>${l.porcentaje}%</td></tr>`).join("")}
+              <tr style="background:var(--gray-50);font-weight:700"><td>TOTAL GENERAL</td><td>${fmtMoney(data.total_general)}</td><td>100%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      ${data.lineas.map(l => `
+        <div class="card mb-4">
+          <div class="card-title" style="margin-bottom:12px">${l.linea} — ${fmtMoney(l.total)} (${l.porcentaje}%)</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Material</th><th>Unidad</th><th>Cantidad</th><th>Valor</th></tr></thead>
+              <tbody>
+                ${l.materiales.map(m => `<tr><td>${m.material}</td><td>${m.unidad}</td><td>${m.cantidad}</td><td>${fmtMoney(m.valor)}</td></tr>`).join("")}
+                <tr style="background:var(--gray-50);font-weight:700"><td colspan="3">Subtotal</td><td>${fmtMoney(l.total)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>`).join("")}
+    `;
+  } catch (err) {
+    container.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+  }
+}
+
+async function loadMaterialesSelect() {
+  const sel = document.getElementById("mat-select");
+  if (sel.options.length > 0) return; // ya cargado
+  try {
+    const mats = await apiFetch("/api/materiales/");
+    const grupos = { produccion: [], epps: [], mantenimiento: [] };
+    mats.forEach(m => { if (grupos[m.categoria]) grupos[m.categoria].push(m); });
+    const catLabel = { produccion: "PRODUCCIÓN", epps: "EPPs", mantenimiento: "MANTENIMIENTO" };
+    for (const [cat, items] of Object.entries(grupos)) {
+      if (!items.length) continue;
+      const grp = document.createElement("optgroup");
+      grp.label = catLabel[cat];
+      items.forEach(m => {
+        const o = document.createElement("option");
+        o.value = m.id;
+        o.textContent = `${m.codigo} – ${m.nombre}`;
+        grp.appendChild(o);
+      });
+      sel.appendChild(grp);
+    }
+  } catch (err) {
+    showToast("Error cargando materiales: " + err.message, "error");
+  }
+}
+
+async function loadReporteMaterial() {
+  const container = document.getElementById("reporte-material");
+  container.innerHTML = "<p class='text-muted'>Generando reporte...</p>";
+  const matId = document.getElementById("mat-select").value;
+  const fi = document.getElementById("mat-inicio").value;
+  const ff = document.getElementById("mat-fin").value;
+  if (!matId) { container.innerHTML = "<p class='text-muted'>Selecciona un material.</p>"; return; }
+  try {
+    const data = await apiFetch(`/api/reportes/material/${matId}?fecha_inicio=${fi}&fecha_fin=${ff}`);
+    container.innerHTML = `
+      <div class="card">
+        <div class="card-title" style="margin-bottom:4px">${data.material} (${data.unidad})</div>
+        <div class="text-muted text-sm" style="margin-bottom:16px">Del ${fi} al ${ff} · Total: ${fmtMoney(data.total_valor)} · Cantidad: ${data.total_cantidad} ${data.unidad}</div>
+        ${!data.registros.length ? "<p class='text-muted'>Sin solicitudes en este período.</p>" : `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Solicitud</th><th>Fecha</th><th>Solicitante</th><th>Línea</th><th>Estado</th><th>Cant. Sol.</th><th>Cant. Apr.</th><th>Precio</th><th>Valor</th></tr></thead>
+            <tbody>
+              ${data.registros.map(r => `
+                <tr>
+                  <td>#${r.solicitud_id}</td>
+                  <td>${fmtDate(r.fecha)}</td>
+                  <td>${r.solicitante}</td>
+                  <td style="font-size:12px">${r.linea}</td>
+                  <td>${estadoBadge(r.estado)}</td>
+                  <td>${r.cantidad_solicitada}</td>
+                  <td>${r.cantidad_aprobada ?? "—"}</td>
+                  <td>${fmtMoney(r.precio_snapshot)}</td>
+                  <td style="font-weight:600">${fmtMoney(r.valor)}</td>
+                </tr>`).join("")}
+              <tr style="background:var(--gray-50);font-weight:700">
+                <td colspan="8" class="text-right">Totales</td>
+                <td>${fmtMoney(data.total_valor)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>`}
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+  }
+}
+
+async function loadInventario() {
+  const container = document.getElementById("reporte-inventario");
+  container.innerHTML = "<p class='text-muted'>Cargando inventario...</p>";
+  try {
+    const data = await apiFetch("/api/reportes/inventario");
+    container.innerHTML = `
+      <div class="card">
+        <div class="flex justify-between items-center" style="margin-bottom:16px">
+          <div>
+            <div class="card-title">Estado Actual del Inventario</div>
+            <div class="text-muted text-sm">Generado: ${fmtDatetime(data.generado_en)} · ${data.total_items} materiales · Valor total: ${fmtMoney(data.valor_total_inventario)}</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Código</th><th>Material</th><th>Unidad</th><th>Precio Unit.</th><th>Stock Actual</th><th>Stock Mín.</th><th>Valor en Stock</th><th>Estado</th></tr></thead>
+            <tbody>
+              ${data.materiales.map(m => `
+                <tr>
+                  <td><code style="font-size:11px;background:var(--gray-100);padding:2px 5px;border-radius:3px">${m.codigo || "—"}</code></td>
+                  <td style="font-weight:500">${m.nombre}</td>
+                  <td>${m.unidad_medida}</td>
+                  <td>${fmtMoney(m.precio_unitario)}</td>
+                  <td>${m.stock_actual}</td>
+                  <td>${m.stock_minimo}</td>
+                  <td style="font-weight:600">${fmtMoney(m.valor_total)}</td>
+                  <td>${stockBadge(m.estado)}</td>
+                </tr>`).join("")}
+              <tr style="background:var(--gray-50);font-weight:700">
+                <td colspan="6" class="text-right">Valor Total del Inventario</td>
+                <td>${fmtMoney(data.valor_total_inventario)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+  }
+}
+
+// ── Inicialización ────────────────────────────────────────────────────────────
+const user = requireAuth(["coordinador", "bodeguero"]);
+if (user) {
+  renderSidebar("reportes");
+  setDefaults();
+  loadMaterialesSelect();
+  loadReporteLineas();
+}
+</script>
+</body>
+</html>

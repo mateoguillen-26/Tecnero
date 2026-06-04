@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard – Novum GLP</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="app-sidebar"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div>
+        <h1>Dashboard</h1>
+        <div class="breadcrumb">Resumen general del sistema</div>
+      </div>
+      <div class="flex gap-2 items-center">
+        <input type="date" id="fecha-inicio" class="form-control" style="width:140px">
+        <span style="color:#6b7280;font-size:13px">hasta</span>
+        <input type="date" id="fecha-fin" class="form-control" style="width:140px">
+        <button class="btn btn-secondary btn-sm" id="btn-filtrar">Filtrar</button>
+        <button class="btn btn-secondary btn-sm" id="btn-reset">Este mes</button>
+      </div>
+    </div>
+
+    <div class="page-content">
+      <!-- KPIs -->
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card"><div class="kpi-icon blue"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></div><div class="kpi-label">Solicitudes del Mes</div><div class="kpi-value" id="kpi-total-sol">—</div></div>
+        <div class="kpi-card"><div class="kpi-icon green"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div class="kpi-label">Monto Total del Mes</div><div class="kpi-value" id="kpi-monto">—</div></div>
+        <div class="kpi-card"><div class="kpi-icon yellow"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div class="kpi-label">Pendientes de Aprobación</div><div class="kpi-value" id="kpi-pendientes">—</div></div>
+        <div class="kpi-card"><div class="kpi-icon red"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div><div class="kpi-label">Alertas de Stock Activas</div><div class="kpi-value" id="kpi-alertas">—</div></div>
+      </div>
+
+      <!-- Gráficos -->
+      <div class="charts-grid">
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">Gasto por Línea de Producción</div><div class="card-sub">Solicitudes aprobadas y entregadas</div></div></div>
+          <div class="chart-container"><canvas id="chart-lineas"></canvas></div>
+          <div id="lineas-leyenda" style="margin-top:12px"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">Top 5 Materiales</div><div class="card-sub">Por valor total solicitado</div></div></div>
+          <div class="chart-container"><canvas id="chart-materiales"></canvas></div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">
+        <!-- Inventario -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Estado del Inventario</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Material</th><th>Unidad</th><th>Stock Actual</th><th>Stock Mínimo</th><th>Estado</th></tr></thead>
+              <tbody id="inventario-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Alertas activas -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Alertas Activas</div></div>
+          <div id="alertas-panel"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+const user = requireAuth();
+if (user) {
+  renderSidebar("dashboard");
+  let chartLineas = null, chartMat = null;
+
+  function getDefaultDates() {
+    const now = new Date();
+    const inicio = new Date(now.getFullYear(), now.getMonth(), 1);
+    return {
+      inicio: inicio.toISOString().split("T")[0],
+      fin: now.toISOString().split("T")[0],
+    };
+  }
+
+  async function loadDashboard() {
+    const fi = document.getElementById("fecha-inicio").value;
+    const ff = document.getElementById("fecha-fin").value;
+    let url = "/api/dashboard/";
+    if (fi || ff) url += `?fecha_inicio=${fi}&fecha_fin=${ff}`;
+
+    try {
+      const data = await apiFetch(url);
+      renderKPIs(data.kpis);
+      renderChartLineas(data.gasto_por_linea);
+      renderChartMateriales(data.top_materiales);
+      renderInventario(data.inventario);
+      renderAlertas(data.alertas);
+    } catch (err) {
+      showToast("Error cargando dashboard: " + err.message, "error");
+    }
+  }
+
+  function renderKPIs(kpis) {
+    document.getElementById("kpi-total-sol").textContent = kpis.total_solicitudes_mes;
+    document.getElementById("kpi-monto").textContent = fmtMoney(kpis.monto_total_mes);
+    document.getElementById("kpi-pendientes").textContent = kpis.solicitudes_pendientes;
+    document.getElementById("kpi-alertas").textContent = kpis.alertas_activas;
+  }
+
+  function renderChartLineas(datos) {
+    if (chartLineas) chartLineas.destroy();
+    const ctx = document.getElementById("chart-lineas").getContext("2d");
+    const colors = ["#1a56db","#057a55","#c27803","#c81e1e","#7e3af2","#0694a2"];
+    const labels = datos.map(d => d.linea.replace("de cilindro de 15 kg","").replace("de 15 kg","").trim());
+    chartLineas = new Chart(ctx, {
+      type: "doughnut",
+      data: { labels, datasets: [{ data: datos.map(d => d.total), backgroundColor: colors.slice(0, datos.length), borderWidth: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+    });
+    // Leyenda custom
+    const leg = document.getElementById("lineas-leyenda");
+    leg.innerHTML = datos.map((d, i) => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px">
+        <div style="width:12px;height:12px;border-radius:2px;background:${colors[i]};flex-shrink:0"></div>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.linea}">${d.linea}</span>
+        <span style="font-weight:600">${fmtMoney(d.total)}</span>
+        <span style="color:#6b7280">${d.porcentaje}%</span>
+      </div>`).join("") || "<p class='text-muted text-sm'>Sin datos en el período seleccionado</p>";
+  }
+
+  function renderChartMateriales(datos) {
+    if (chartMat) chartMat.destroy();
+    if (!datos.length) return;
+    const ctx = document.getElementById("chart-materiales").getContext("2d");
+    chartMat = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: datos.map(d => d.material),
+        datasets: [{ label: "Valor ($)", data: datos.map(d => d.total_valor), backgroundColor: "#1a56db", borderRadius: 4 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: "y",
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { callback: v => "$" + v.toLocaleString("es-CL") } } },
+      },
+    });
+  }
+
+  function renderInventario(inventario) {
+    const tbody = document.getElementById("inventario-tbody");
+    if (!inventario.length) { tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Sin materiales</td></tr>`; return; }
+    tbody.innerHTML = inventario.map(m => `
+      <tr>
+        <td><span class="stock-dot ${m.estado}"></span>${m.nombre}</td>
+        <td>${m.unidad_medida}</td>
+        <td>${m.stock_actual}</td>
+        <td>${m.stock_minimo}</td>
+        <td>${stockBadge(m.estado)}</td>
+      </tr>`).join("");
+  }
+
+  function renderAlertas(alertas) {
+    const panel = document.getElementById("alertas-panel");
+    if (!alertas.length) { panel.innerHTML = `<p class="text-muted text-sm" style="padding:12px">No hay alertas activas</p>`; return; }
+    panel.innerHTML = alertas.map(a => `
+      <div class="alert-item ${a.tipo}">
+        <div class="alert-icon">${a.tipo === "sin_stock" ? "🔴" : "🟡"}</div>
+        <div>
+          <div class="alert-msg">${a.material_nombre}</div>
+          <div class="alert-detail">${a.tipo === "sin_stock" ? "Sin stock" : "Stock bajo"} · Actual: ${a.stock_actual} / Mín: ${a.stock_minimo}</div>
+        </div>
+      </div>`).join("");
+  }
+
+  // Init
+  const defaults = getDefaultDates();
+  document.getElementById("fecha-inicio").value = defaults.inicio;
+  document.getElementById("fecha-fin").value = defaults.fin;
+
+  document.getElementById("btn-filtrar").addEventListener("click", loadDashboard);
+  document.getElementById("btn-reset").addEventListener("click", () => {
+    const d = getDefaultDates();
+    document.getElementById("fecha-inicio").value = d.inicio;
+    document.getElementById("fecha-fin").value = d.fin;
+    loadDashboard();
+  });
+
+  loadDashboard();
+}
+</script>
+</body>
+</html>

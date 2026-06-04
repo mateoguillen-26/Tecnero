@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mis Solicitudes – Novum GLP</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="app-sidebar"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div><h1>Mis Solicitudes</h1><div class="breadcrumb">Historial de requerimientos de materiales</div></div>
+      <div class="flex gap-2">
+        <select id="filtro-estado" class="form-control" style="width:160px">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="aprobada">Aprobada</option>
+          <option value="rechazada">Rechazada</option>
+          <option value="entregada">Entregada</option>
+        </select>
+        <a href="/nueva-solicitud.html" class="btn btn-primary">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Nueva Solicitud
+        </a>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Línea de Producción</th><th>Fecha Req.</th>
+                <th>Ítems</th><th>Total</th><th>Estado</th><th>Creada</th><th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="sol-tbody">
+              <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalle -->
+<div class="modal-overlay hidden" id="modal-detalle">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Detalle de Solicitud</span>
+      <button class="modal-close" onclick="cerrarDetalle()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="cerrarDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+// ── Funciones globales (accesibles desde onclick en HTML dinámico) ────────────
+
+function cerrarDetalle() {
+  document.getElementById("modal-detalle").classList.add("hidden");
+}
+
+async function loadSolicitudes() {
+  const estado = document.getElementById("filtro-estado").value;
+  const tbody = document.getElementById("sol-tbody");
+  try {
+    const url = "/api/solicitudes/" + (estado ? `?estado=${estado}` : "");
+    const data = await apiFetch(url);
+    if (!data.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>No tienes solicitudes${estado ? " con este estado" : ""}.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(s => `
+      <tr>
+        <td style="font-weight:600">#${s.id}</td>
+        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.linea_produccion_nombre}">${s.linea_produccion_nombre}</td>
+        <td>${fmtDate(s.fecha_requerida)}</td>
+        <td>${s.num_items}</td>
+        <td style="font-weight:600">${fmtMoney(s.total)}</td>
+        <td>${estadoBadge(s.estado)}</td>
+        <td>${fmtDate(s.created_at)}</td>
+        <td><button class="btn btn-secondary btn-sm" onclick="verDetalle(${s.id})">Ver</button></td>
+      </tr>`).join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Error: ${err.message}</td></tr>`;
+    showToast("Error cargando solicitudes: " + err.message, "error");
+  }
+}
+
+async function verDetalle(id) {
+  const body = document.getElementById("modal-body");
+  body.innerHTML = "<p class='text-muted text-sm'>Cargando...</p>";
+  document.getElementById("modal-detalle").classList.remove("hidden");
+  try {
+    const [s, historial] = await Promise.all([
+      apiFetch(`/api/solicitudes/${id}`),
+      apiFetch(`/api/solicitudes/${id}/historial`),
+    ]);
+    document.getElementById("modal-title").textContent = `Solicitud #${s.id}`;
+    body.innerHTML = `
+      <div class="form-row" style="margin-bottom:12px">
+        <div><div class="form-label">Estado</div>${estadoBadge(s.estado)}</div>
+        <div><div class="form-label">Línea de Producción</div><span>${s.linea_produccion_nombre}</span></div>
+        <div><div class="form-label">Fecha Requerida</div><span>${fmtDate(s.fecha_requerida)}</span></div>
+        <div><div class="form-label">Creada</div><span>${fmtDatetime(s.created_at)}</span></div>
+      </div>
+      ${s.observaciones ? `<div class="form-group"><div class="form-label">Observaciones</div><p>${s.observaciones}</p></div>` : ""}
+      <hr class="divider">
+      <div class="form-label" style="margin-bottom:8px">Materiales Solicitados</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Código</th><th>Material</th><th>Cant. Solicitada</th><th>Cant. Aprobada</th><th>Precio Unit.</th><th>Subtotal</th></tr></thead>
+          <tbody>
+            ${s.detalles.map(d => `
+              <tr>
+                <td><code style="font-size:11px;background:var(--gray-100);padding:2px 5px;border-radius:3px">${d.material_codigo || "—"}</code></td>
+                <td>${d.material_nombre} <span class="text-muted text-sm">(${d.material_unidad})</span></td>
+                <td>${d.cantidad_solicitada}</td>
+                <td>${d.cantidad_aprobada ?? '<span class="text-muted">—</span>'}</td>
+                <td>${fmtMoney(d.precio_unitario_snapshot)}</td>
+                <td style="font-weight:600">${fmtMoney(d.subtotal)}</td>
+              </tr>`).join("")}
+            <tr style="background:var(--gray-50)">
+              <td colspan="5" class="text-right font-semibold">Total</td>
+              <td style="font-weight:700">${fmtMoney(s.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <hr class="divider">
+      <div class="form-label" style="margin-bottom:8px">Historial de Estados</div>
+      ${historial.map(h => `
+        <div style="display:flex;gap:12px;margin-bottom:8px;font-size:13px;flex-wrap:wrap">
+          <span class="text-muted" style="white-space:nowrap">${fmtDatetime(h.created_at)}</span>
+          <span>${h.estado_anterior ? estadoBadge(h.estado_anterior) + " → " : ""}${estadoBadge(h.estado_nuevo)}</span>
+          <span style="color:#374151">${h.usuario_nombre}</span>
+          ${h.comentario ? `<span class="text-muted">"${h.comentario}"</span>` : ""}
+        </div>`).join("")}
+    `;
+  } catch (err) {
+    body.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+  }
+}
+
+// ── Inicialización ────────────────────────────────────────────────────────────
+const user = requireAuth(["solicitante"]);
+if (user) {
+  renderSidebar("solicitudes");
+  document.getElementById("filtro-estado").addEventListener("change", loadSolicitudes);
+  loadSolicitudes();
+}
+</script>
+</body>
+</html>

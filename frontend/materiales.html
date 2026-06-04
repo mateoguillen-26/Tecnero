@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Materiales – Novum GLP</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .cat-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+    .cat-produccion { background:#e1effe; color:#1c64f2; }
+    .cat-epps { background:#def7ec; color:#057a55; }
+    .cat-mantenimiento { background:#fdf6b2; color:#c27803; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <div class="sidebar" id="app-sidebar"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div><h1>Gestión de Materiales</h1><div class="breadcrumb">Inventario de materias primas, EPPs y mantenimiento</div></div>
+      <button class="btn btn-primary" onclick="abrirModal()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Nuevo Material
+      </button>
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="flex gap-2 mb-4" style="flex-wrap:wrap">
+          <input type="text" id="buscar" class="form-control" style="max-width:240px" placeholder="Código o nombre...">
+          <select id="filtro-cat" class="form-control" style="width:170px">
+            <option value="">Todas las categorías</option>
+            <option value="produccion">Producción</option>
+            <option value="epps">EPPs</option>
+            <option value="mantenimiento">Mantenimiento</option>
+          </select>
+          <select id="filtro-unidad" class="form-control" style="width:130px">
+            <option value="">Todas las unidades</option>
+            <option value="kg">kg</option>
+            <option value="litro">litro</option>
+            <option value="unidad">unidad</option>
+          </select>
+          <label class="flex items-center gap-2" style="font-size:13px;cursor:pointer">
+            <input type="checkbox" id="mostrar-inactivos"> Mostrar inactivos
+          </label>
+        </div>
+        <div id="contador" class="text-muted text-sm mb-4"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Precio Unit.</th><th>Stock Actual</th><th>Stock Mín.</th><th>Estado</th><th>Acciones</th></tr>
+            </thead>
+            <tbody id="mat-tbody">
+              <tr><td colspan="9" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal crear/editar -->
+<div class="modal-overlay hidden" id="modal-mat">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Nuevo Material</span>
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-material" onsubmit="return false">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Código <span class="required">*</span></label>
+            <input type="text" id="mat-codigo" class="form-control" placeholder="Ej: M-MAPI-001" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Categoría <span class="required">*</span></label>
+            <select id="mat-categoria" class="form-control" required>
+              <option value="produccion">Producción</option>
+              <option value="epps">EPPs</option>
+              <option value="mantenimiento">Mantenimiento</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nombre <span class="required">*</span></label>
+          <input type="text" id="mat-nombre" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Descripción</label>
+          <textarea id="mat-descripcion" class="form-control"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Unidad de Medida <span class="required">*</span></label>
+            <select id="mat-unidad" class="form-control" required>
+              <option value="">Seleccionar...</option>
+              <option value="kg">kg</option>
+              <option value="litro">litro</option>
+              <option value="unidad">unidad</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Precio Unitario ($) <span class="required">*</span></label>
+            <input type="number" id="mat-precio" class="form-control" min="0.01" step="0.01" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Stock Actual</label>
+            <input type="number" id="mat-stock" class="form-control" min="0" step="0.01" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stock Mínimo</label>
+            <input type="number" id="mat-minimo" class="form-control" min="0" step="0.01" value="0">
+            <div class="form-hint">Umbral para activar alertas de stock bajo</div>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-guardar" onclick="guardarMaterial()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+// ── Estado global ─────────────────────────────────────────────────────────────
+let materiales = [];
+let editId = null;
+
+const catLabel = { produccion: "Producción", epps: "EPPs", mantenimiento: "Mant." };
+const catClass = { produccion: "cat-produccion", epps: "cat-epps", mantenimiento: "cat-mantenimiento" };
+
+// ── Funciones globales ────────────────────────────────────────────────────────
+
+async function loadMateriales() {
+  const tbody = document.getElementById("mat-tbody");
+  const inactivos = document.getElementById("mostrar-inactivos")?.checked;
+  try {
+    materiales = await apiFetch(`/api/materiales/?solo_activos=${!inactivos}`);
+    renderTabla();
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-danger text-center">Error: ${err.message}</td></tr>`;
+  }
+}
+
+function renderTabla() {
+  const buscar = (document.getElementById("buscar")?.value || "").toLowerCase();
+  const cat = document.getElementById("filtro-cat")?.value || "";
+  const unidad = document.getElementById("filtro-unidad")?.value || "";
+  const tbody = document.getElementById("mat-tbody");
+  const user = getUser();
+
+  const filtrados = materiales.filter(m =>
+    (!buscar || m.codigo.toLowerCase().includes(buscar) || m.nombre.toLowerCase().includes(buscar)) &&
+    (!cat || m.categoria === cat) &&
+    (!unidad || m.unidad_medida === unidad)
+  );
+
+  const contador = document.getElementById("contador");
+  if (contador) contador.textContent = `Mostrando ${filtrados.length} de ${materiales.length} materiales`;
+
+  if (!filtrados.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p>No se encontraron materiales.</p></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtrados.map(m => {
+    const estado = m.stock_actual <= 0 ? "sin_stock" : m.stock_actual <= m.stock_minimo ? "bajo" : "normal";
+    return `
+      <tr style="${!m.activo ? 'opacity:.5' : ''}">
+        <td><code style="font-size:12px;background:var(--gray-100);padding:2px 6px;border-radius:4px">${m.codigo}</code></td>
+        <td>${m.nombre}${!m.activo ? ' <span class="badge badge-rechazada">Inactivo</span>' : ""}</td>
+        <td><span class="cat-badge ${catClass[m.categoria] || ''}">${catLabel[m.categoria] || m.categoria}</span></td>
+        <td>${m.unidad_medida}</td>
+        <td style="font-weight:600">${fmtMoney(m.precio_unitario)}</td>
+        <td><span class="stock-dot ${estado}"></span>${m.stock_actual}</td>
+        <td>${m.stock_minimo}</td>
+        <td>${stockBadge(estado)}</td>
+        <td>
+          <div class="flex gap-2">
+            <button class="btn btn-secondary btn-sm" onclick="abrirModal(${m.id})">Editar</button>
+            ${m.activo && user && user.rol === "coordinador" ? `<button class="btn btn-danger btn-sm" onclick="desactivar(${m.id})">Desactivar</button>` : ""}
+          </div>
+        </td>
+      </tr>`;
+  }).join("");
+}
+
+function abrirModal(id) {
+  editId = id || null;
+  const codigoInput = document.getElementById("mat-codigo");
+  document.getElementById("modal-title").textContent = id ? "Editar Material" : "Nuevo Material";
+
+  if (id) {
+    const m = materiales.find(x => x.id === id);
+    if (!m) return;
+    codigoInput.value = m.codigo;
+    codigoInput.disabled = true;
+    document.getElementById("mat-categoria").value = m.categoria;
+    document.getElementById("mat-nombre").value = m.nombre;
+    document.getElementById("mat-descripcion").value = m.descripcion || "";
+    document.getElementById("mat-unidad").value = m.unidad_medida;
+    document.getElementById("mat-precio").value = m.precio_unitario;
+    document.getElementById("mat-stock").value = m.stock_actual;
+    document.getElementById("mat-minimo").value = m.stock_minimo;
+  } else {
+    document.getElementById("form-material").reset();
+    codigoInput.disabled = false;
+  }
+  document.getElementById("modal-mat").classList.remove("hidden");
+}
+
+function cerrarModal() {
+  document.getElementById("modal-mat").classList.add("hidden");
+  document.getElementById("mat-codigo").disabled = false;
+  editId = null;
+}
+
+async function guardarMaterial() {
+  const btn = document.getElementById("btn-guardar");
+  btn.disabled = true;
+  btn.textContent = "Guardando...";
+
+  const payload = {
+    codigo: document.getElementById("mat-codigo").value.trim().toUpperCase(),
+    nombre: document.getElementById("mat-nombre").value.trim().toUpperCase(),
+    descripcion: document.getElementById("mat-descripcion").value || null,
+    categoria: document.getElementById("mat-categoria").value,
+    unidad_medida: document.getElementById("mat-unidad").value,
+    precio_unitario: parseFloat(document.getElementById("mat-precio").value),
+    stock_actual: parseFloat(document.getElementById("mat-stock").value || 0),
+    stock_minimo: parseFloat(document.getElementById("mat-minimo").value || 0),
+  };
+
+  // Validar campos requeridos
+  if (!payload.nombre || !payload.unidad_medida || !payload.precio_unitario) {
+    showToast("Completa todos los campos requeridos", "error");
+    btn.disabled = false;
+    btn.textContent = "Guardar";
+    return;
+  }
+
+  try {
+    if (editId) {
+      const { codigo, ...updatePayload } = payload;
+      await apiFetch(`/api/materiales/${editId}`, { method: "PUT", body: JSON.stringify(updatePayload) });
+      showToast("Material actualizado", "success");
+    } else {
+      await apiFetch("/api/materiales/", { method: "POST", body: JSON.stringify(payload) });
+      showToast("Material creado", "success");
+    }
+    cerrarModal();
+    loadMateriales();
+  } catch (err) {
+    showToast("Error: " + err.message, "error");
+  }
+  btn.disabled = false;
+  btn.textContent = "Guardar";
+}
+
+async function desactivar(id) {
+  const m = materiales.find(x => x.id === id);
+  if (!confirm(`¿Desactivar "${m?.nombre}"? No aparecerá en nuevas solicitudes.`)) return;
+  try {
+    await apiFetch(`/api/materiales/${id}`, { method: "DELETE" });
+    showToast("Material desactivado", "success");
+    loadMateriales();
+  } catch (err) {
+    showToast("Error: " + err.message, "error");
+  }
+}
+
+// ── Inicialización ────────────────────────────────────────────────────────────
+const user = requireAuth(["coordinador", "bodeguero"]);
+if (user) {
+  renderSidebar("materiales");
+
+  document.getElementById("buscar").addEventListener("input", renderTabla);
+  document.getElementById("filtro-cat").addEventListener("change", renderTabla);
+  document.getElementById("filtro-unidad").addEventListener("change", renderTabla);
+  document.getElementById("mostrar-inactivos").addEventListener("change", loadMateriales);
+
+  loadMateriales();
+}
+</script>
+</body>
+</html>

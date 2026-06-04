@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novum GLP – Iniciar Sesión</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-box">
+      <div class="login-logo">
+        <div class="logo-circle">N</div>
+        <h1>Corporación Novum</h1>
+        <p>Sistema de Requerimientos de Materiales</p>
+      </div>
+
+      <div id="login-error" class="login-error hidden"></div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="email">Correo electrónico</label>
+          <input type="email" id="email" class="form-control" placeholder="usuario@novum.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="password">Contraseña</label>
+          <input type="password" id="password" class="form-control" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;" id="btn-login">
+          Iniciar Sesión
+        </button>
+      </form>
+
+      <p style="text-align:center;margin-top:20px;font-size:12px;color:#6b7280;">
+        Usuarios de prueba: solicitante@novum.com · coordinador@novum.com · bodeguero@novum.com<br>
+        Contraseña: <strong>password123</strong>
+      </p>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    // Si ya hay sesión activa, redirigir al dashboard
+    if (localStorage.getItem("token")) window.location.href = "/dashboard.html";
+
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("btn-login");
+      btn.disabled = true;
+      btn.textContent = "Ingresando...";
+
+      const errorEl = document.getElementById("login-error");
+      errorEl.classList.add("hidden");
+
+      try {
+        const data = await apiFetch("/api/usuarios/login", {
+          method: "POST",
+          body: JSON.stringify({
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value,
+          }),
+        });
+
+        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("user", JSON.stringify({ id: data.id, nombre: data.nombre, rol: data.rol }));
+        window.location.href = "/dashboard.html";
+      } catch (err) {
+        errorEl.textContent = err.message || "Error al iniciar sesión";
+        errorEl.classList.remove("hidden");
+        btn.disabled = false;
+        btn.textContent = "Iniciar Sesión";
+      }
+    });
+  </script>
+</body>
+</html>
