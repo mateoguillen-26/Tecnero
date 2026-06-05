@@ -43,13 +43,15 @@ if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=os.path.join(frontend_path, "css")), name="css")
     app.mount("/js", StaticFiles(directory=os.path.join(frontend_path, "js")), name="js")
 
+    _no_cache = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+
     @app.get("/")
     def serve_index():
-        return FileResponse(os.path.join(frontend_path, "index.html"))
+        return FileResponse(os.path.join(frontend_path, "index.html"), headers=_no_cache)
 
     @app.get("/{page}.html")
     def serve_page(page: str):
         filepath = os.path.join(frontend_path, f"{page}.html")
         if os.path.exists(filepath):
-            return FileResponse(filepath)
-        return FileResponse(os.path.join(frontend_path, "index.html"))
+            return FileResponse(filepath, headers=_no_cache)
+        return FileResponse(os.path.join(frontend_path, "index.html"), headers=_no_cache)

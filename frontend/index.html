@@ -38,14 +38,15 @@
     </div>
   </div>
 
-  <script src="/js/api.js?v=2"></script>
+  <script src="/js/api.js?v=3"></script>
   <script>
     // Si ya hay sesión activa, redirigir a la página principal del rol
     if (localStorage.getItem("token")) {
       const u = JSON.parse(localStorage.getItem("user") || "{}");
       if (u.rol === "solicitante") window.location.href = "/solicitudes.html";
       else if (u.rol === "bodeguero") window.location.href = "/bodega.html";
-      else window.location.href = "/dashboard.html";
+      else if (u.rol === "coordinador") window.location.href = "/dashboard.html";
+      else localStorage.clear();
     }
 
     document.getElementById("login-form").addEventListener("submit", async (e) => {

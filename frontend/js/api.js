@@ -51,19 +51,19 @@ function getUser() {
 }
 
 function requireAuth(allowedRoles = null) {
+  document.documentElement.style.visibility = "hidden";
   const token = localStorage.getItem("token");
   const user = getUser();
   if (!token || !user) {
-    window.location.href = "/index.html";
+    window.location.replace("/index.html");
     return null;
   }
   if (allowedRoles && !allowedRoles.includes(user.rol)) {
-    showToast("No tienes permisos para acceder a esta página", "error");
     const homeByRole = { solicitante: "/solicitudes.html", bodeguero: "/bodega.html", coordinador: "/dashboard.html" };
-    const home = homeByRole[user.rol] || "/index.html";
-    setTimeout(() => window.location.href = home, 1500);
+    window.location.replace(homeByRole[user.rol] || "/index.html");
     return null;
   }
+  document.documentElement.style.visibility = "";
   return user;
 }
 
