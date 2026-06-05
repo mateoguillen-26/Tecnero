@@ -54,6 +54,8 @@ def get_aprobadas(
             "id": s.id,
             "solicitante_nombre": s.solicitante.nombre if s.solicitante else "—",
             "linea_produccion_nombre": s.linea_produccion.nombre if s.linea_produccion else "—",
+            "tipo": s.tipo or "requerimiento",
+            "proveedor": s.proveedor,
             "estado": s.estado,
             "fecha_requerida": s.fecha_requerida,
             "created_at": s.created_at,

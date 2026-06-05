@@ -59,7 +59,9 @@ function requireAuth(allowedRoles = null) {
   }
   if (allowedRoles && !allowedRoles.includes(user.rol)) {
     showToast("No tienes permisos para acceder a esta página", "error");
-    setTimeout(() => window.location.href = "/dashboard.html", 1500);
+    const homeByRole = { solicitante: "/solicitudes.html", bodeguero: "/bodega.html", coordinador: "/dashboard.html" };
+    const home = homeByRole[user.rol] || "/index.html";
+    setTimeout(() => window.location.href = home, 1500);
     return null;
   }
   return user;
