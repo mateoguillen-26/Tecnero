@@ -11,11 +11,13 @@ router = APIRouter(prefix="/api/aprobaciones", tags=["aprobaciones"])
 
 @router.get("/pendientes", response_model=list[schemas.SolicitudResumen])
 def get_pendientes(
+    tipo: str = "requerimiento",
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(require_roles("coordinador")),
 ):
     solicitudes = db.query(models.Solicitud).filter(
-        models.Solicitud.estado == "pendiente"
+        models.Solicitud.estado == "pendiente",
+        models.Solicitud.tipo == tipo,
     ).order_by(models.Solicitud.created_at).all()
 
     result = []
@@ -25,6 +27,8 @@ def get_pendientes(
             "id": s.id,
             "solicitante_nombre": s.solicitante.nombre if s.solicitante else "—",
             "linea_produccion_nombre": s.linea_produccion.nombre if s.linea_produccion else "—",
+            "tipo": s.tipo,
+            "proveedor": s.proveedor,
             "estado": s.estado,
             "fecha_requerida": s.fecha_requerida,
             "created_at": s.created_at,

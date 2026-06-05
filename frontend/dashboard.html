@@ -74,7 +74,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-const user = requireAuth();
+const user = requireAuth(["coordinador"]);
 if (user) {
   renderSidebar("dashboard");
   let chartLineas = null, chartMat = null;

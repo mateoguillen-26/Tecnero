@@ -52,8 +52,10 @@ class Solicitud(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     solicitante_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
-    linea_produccion_id = Column(Integer, ForeignKey("lineas_produccion.id"), nullable=False)
-    estado = Column(String(20), default="pendiente")  # pendiente | aprobada | rechazada | entregada
+    linea_produccion_id = Column(Integer, ForeignKey("lineas_produccion.id"), nullable=True)
+    tipo = Column(String(20), default="requerimiento")  # requerimiento | pedido_compra
+    estado = Column(String(20), default="pendiente")  # pendiente | aprobada | rechazada | entregada | recibida
+    proveedor = Column(String(200), nullable=True)
     observaciones = Column(Text)
     fecha_requerida = Column(DateTime)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

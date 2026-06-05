@@ -40,8 +40,13 @@
 
   <script src="/js/api.js"></script>
   <script>
-    // Si ya hay sesión activa, redirigir al dashboard
-    if (localStorage.getItem("token")) window.location.href = "/dashboard.html";
+    // Si ya hay sesión activa, redirigir a la página principal del rol
+    if (localStorage.getItem("token")) {
+      const u = JSON.parse(localStorage.getItem("user") || "{}");
+      if (u.rol === "solicitante") window.location.href = "/solicitudes.html";
+      else if (u.rol === "bodeguero") window.location.href = "/bodega.html";
+      else window.location.href = "/dashboard.html";
+    }
 
     document.getElementById("login-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -63,7 +68,10 @@
 
         localStorage.setItem("token", data.access_token);
         localStorage.setItem("user", JSON.stringify({ id: data.id, nombre: data.nombre, rol: data.rol }));
-        window.location.href = "/dashboard.html";
+        const rol = data.rol;
+        if (rol === "solicitante") window.location.href = "/solicitudes.html";
+        else if (rol === "bodeguero") window.location.href = "/bodega.html";
+        else window.location.href = "/dashboard.html";
       } catch (err) {
         errorEl.textContent = err.message || "Error al iniciar sesión";
         errorEl.classList.remove("hidden");

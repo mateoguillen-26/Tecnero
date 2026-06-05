@@ -174,7 +174,7 @@ def seed():
     # 1. Solicitud ENTREGADA – Fabricacion de cilindro (mes actual)
     s1 = models.Solicitud(
         solicitante_id=solicitante.id, linea_produccion_id=lineas[0].id,
-        estado="entregada", observaciones="Lote de produccion mensual",
+        tipo="requerimiento", estado="entregada", observaciones="Lote de produccion mensual",
         fecha_requerida=dias(0), created_at=dias(-3), updated_at=dias(-1),
     )
     db.add(s1); db.flush()
@@ -195,7 +195,7 @@ def seed():
     # 2. Solicitud APROBADA – Reparacion de cilindro (mes actual)
     s2 = models.Solicitud(
         solicitante_id=solicitante.id, linea_produccion_id=lineas[1].id,
-        estado="aprobada", observaciones="Reparacion urgente de 10 cilindros",
+        tipo="requerimiento", estado="aprobada", observaciones="Reparacion urgente de 10 cilindros",
         fecha_requerida=dias(2), created_at=dias(-2), updated_at=dias(-1),
     )
     db.add(s2); db.flush()
@@ -215,7 +215,7 @@ def seed():
     # 3. Solicitud PENDIENTE – Fabricacion de asas
     s3 = models.Solicitud(
         solicitante_id=solicitante.id, linea_produccion_id=lineas[2].id,
-        estado="pendiente", observaciones="Pedido para 200 asas",
+        tipo="requerimiento", estado="pendiente", observaciones="Pedido para 200 asas",
         fecha_requerida=dias(5), created_at=dias(-1), updated_at=dias(-1),
     )
     db.add(s3); db.flush()
@@ -230,7 +230,7 @@ def seed():
     # 4. Solicitud RECHAZADA – Fabricacion de bases
     s4 = models.Solicitud(
         solicitante_id=solicitante.id, linea_produccion_id=lineas[3].id,
-        estado="rechazada", observaciones="Bases para siguiente lote",
+        tipo="requerimiento", estado="rechazada", observaciones="Bases para siguiente lote",
         fecha_requerida=dias(-2), created_at=dias(-5), updated_at=dias(-4),
     )
     db.add(s4); db.flush()
@@ -246,7 +246,7 @@ def seed():
     # 5. Solicitud PENDIENTE – Reparacion de valvulas
     s5 = models.Solicitud(
         solicitante_id=solicitante.id, linea_produccion_id=lineas[4].id,
-        estado="pendiente", observaciones="Reparacion de valvulas defectuosas",
+        tipo="requerimiento", estado="pendiente", observaciones="Reparacion de valvulas defectuosas",
         fecha_requerida=dias(3), created_at=datetime.datetime.utcnow(), updated_at=datetime.datetime.utcnow(),
     )
     db.add(s5); db.flush()

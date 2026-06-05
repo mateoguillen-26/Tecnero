@@ -173,8 +173,10 @@ class SolicitudOut(BaseModel):
     id: int
     solicitante_id: int
     solicitante_nombre: str
-    linea_produccion_id: int
+    linea_produccion_id: Optional[int]
     linea_produccion_nombre: str
+    tipo: str
+    proveedor: Optional[str]
     estado: str
     observaciones: Optional[str]
     fecha_requerida: Optional[datetime]
@@ -190,6 +192,8 @@ class SolicitudResumen(BaseModel):
     id: int
     solicitante_nombre: str
     linea_produccion_nombre: str
+    tipo: str
+    proveedor: Optional[str]
     estado: str
     fecha_requerida: Optional[datetime]
     created_at: datetime
@@ -293,3 +297,34 @@ class DashboardOut(BaseModel):
     top_materiales: List[TopMaterialItem]
     inventario: List[StockItem]
     alertas: List[AlertaOut]
+
+
+# ─── Pedidos de Compra ────────────────────────────────────────────────────────
+
+class PedidoCompraItemCreate(BaseModel):
+    material_id: int
+    cantidad: float
+
+    @field_validator("cantidad")
+    @classmethod
+    def cantidad_positiva(cls, v):
+        if v <= 0:
+            raise ValueError("La cantidad debe ser mayor a 0")
+        return v
+
+
+class PedidoCompraCreate(BaseModel):
+    proveedor: Optional[str] = None
+    observaciones: Optional[str] = None
+    items: List[PedidoCompraItemCreate]
+
+    @field_validator("items")
+    @classmethod
+    def items_no_vacios(cls, v):
+        if not v:
+            raise ValueError("El pedido debe tener al menos un ítem")
+        return v
+
+
+class RecepcionRequest(BaseModel):
+    comentario: Optional[str] = None

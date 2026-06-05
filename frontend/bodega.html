@@ -20,6 +20,15 @@
       background: var(--warning-bg); border: 1px solid #fde68a;
       border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: var(--warning);
     }
+    .tab-nav { display:flex; gap:4px; margin-bottom:20px; border-bottom:2px solid var(--gray-200); padding-bottom:0; }
+    .tab-btn { background:none; border:none; padding:10px 20px; cursor:pointer; font-size:14px; font-weight:500; color:var(--gray-500); border-bottom:2px solid transparent; margin-bottom:-2px; border-radius:4px 4px 0 0; transition:.15s; }
+    .tab-btn:hover { color:var(--primary); background:var(--gray-50); }
+    .tab-btn.active { color:var(--primary); border-bottom-color:var(--primary); font-weight:600; }
+    .pedido-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--gray-100); font-size:13px; gap:8px; }
+    .pedido-item:last-child { border-bottom:none; }
+    .item-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+    .item-row select, .item-row input { flex:1; }
+    .item-row .btn-remove { flex-shrink:0; }
   </style>
 </head>
 <body>
@@ -27,30 +36,67 @@
   <div class="sidebar" id="app-sidebar"></div>
   <div class="main-content">
     <div class="topbar">
-      <div><h1>Despacho de Materiales</h1><div class="breadcrumb">Solicitudes aprobadas pendientes de entrega</div></div>
-      <button class="btn btn-secondary btn-sm" onclick="loadAprobadas()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-        Actualizar
-      </button>
+      <div><h1>Bodega</h1><div class="breadcrumb">Despacho de materiales y pedidos de compra</div></div>
     </div>
     <div class="page-content">
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>#</th><th>Solicitante</th><th>Línea de Producción</th><th>Fecha Req.</th><th>Ítems</th><th>Total Aprobado</th><th>Stock</th><th>Acciones</th></tr>
-            </thead>
-            <tbody id="bod-tbody">
-              <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
-            </tbody>
-          </table>
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('despacho', this)">Despacho de Materiales</button>
+        <button class="tab-btn" onclick="switchTab('pedidos', this)">Pedidos de Compra</button>
+      </div>
+
+      <!-- ── TAB DESPACHO ────────────────────────────────────────────────── -->
+      <div id="tab-despacho">
+        <div class="card">
+          <div class="card-header" style="justify-content:space-between">
+            <div class="card-title">Solicitudes aprobadas pendientes de entrega</div>
+            <button class="btn btn-secondary btn-sm" onclick="loadAprobadas()">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Actualizar
+            </button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Solicitante</th><th>Línea de Producción</th><th>Fecha Req.</th><th>Ítems</th><th>Total Aprobado</th><th>Stock</th><th>Acciones</th></tr>
+              </thead>
+              <tbody id="bod-tbody">
+                <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB PEDIDOS DE COMPRA ──────────────────────────────────────── -->
+      <div id="tab-pedidos" class="hidden">
+        <div class="card">
+          <div class="card-header" style="justify-content:space-between">
+            <div class="card-title">Pedidos de compra para reposición de stock</div>
+            <div class="flex gap-2">
+              <button class="btn btn-secondary btn-sm" onclick="loadPedidos()">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                Actualizar
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="abrirNuevoPedido()">+ Nuevo Pedido</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Fecha</th><th>Materiales</th><th>Proveedor</th><th>Total Est.</th><th>Estado</th><th>Acciones</th></tr>
+              </thead>
+              <tbody id="ped-tbody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Modal detalle entrega -->
+<!-- Modal despacho -->
 <div class="modal-overlay hidden" id="modal-bod">
   <div class="modal modal-lg">
     <div class="modal-header">
@@ -62,13 +108,68 @@
   </div>
 </div>
 
+<!-- Modal nuevo pedido de compra -->
+<div class="modal-overlay hidden" id="modal-pedido">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">Nuevo Pedido de Compra</span>
+      <button class="modal-close" onclick="cerrarModalPedido()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Proveedor (opcional)</label>
+        <input type="text" id="ped-proveedor" class="form-control" placeholder="Nombre del proveedor">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observaciones (opcional)</label>
+        <textarea id="ped-observaciones" class="form-control" placeholder="Detalles del pedido..."></textarea>
+      </div>
+      <hr class="divider">
+      <div class="form-label" style="margin-bottom:10px">Materiales a pedir</div>
+      <div id="ped-items"></div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="agregarItemPedido()">+ Agregar material</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="cerrarModalPedido()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarPedido()">Enviar Pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirmar recepción -->
+<div class="modal-overlay hidden" id="modal-recepcion">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="recep-title">Confirmar Recepción</span>
+      <button class="modal-close" onclick="cerrarModalRecepcion()">✕</button>
+    </div>
+    <div class="modal-body" id="recep-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="cerrarModalRecepcion()">Cancelar</button>
+      <button class="btn btn-success" onclick="confirmarRecepcion()">Confirmar Recepción y Actualizar Stock</button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-// ── Estado global ─────────────────────────────────────────────────────────────
 let solicitudActual = null;
+let pedidoActualId = null;
+let materialesCache = [];
+let itemPedidoCounter = 0;
 
-// ── Funciones globales ────────────────────────────────────────────────────────
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+
+function switchTab(name, btn) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("tab-despacho").classList.toggle("hidden", name !== "despacho");
+  document.getElementById("tab-pedidos").classList.toggle("hidden", name !== "pedidos");
+  if (name === "pedidos") loadPedidos();
+}
+
+// ── DESPACHO ─────────────────────────────────────────────────────────────────
 
 function cerrarModal() {
   document.getElementById("modal-bod").classList.add("hidden");
@@ -85,7 +186,6 @@ async function loadAprobadas() {
       return;
     }
 
-    // Verificar stock de cada solicitud en paralelo
     const checks = await Promise.allSettled(
       data.map(s => apiFetch(`/api/bodega/${s.id}/verificar-stock`))
     );
@@ -122,7 +222,6 @@ async function abrirDespacho(id) {
   document.getElementById("modal-bod").classList.remove("hidden");
 
   try {
-    // Cargar detalle y verificación de stock en paralelo
     const [s, stockCheck] = await Promise.all([
       apiFetch(`/api/solicitudes/${id}`),
       apiFetch(`/api/bodega/${id}/verificar-stock`),
@@ -136,24 +235,17 @@ async function abrirDespacho(id) {
 
     const total = s.detalles.reduce((acc, d) => acc + ((d.cantidad_aprobada || 0) * d.precio_unitario_snapshot), 0);
 
-    // Construir bloque de advertencia si hay faltantes
-    let bloqueHTML = "";
-    if (hayFaltantes) {
-      const listaFaltantes = stockCheck.faltantes.map(f =>
-        `<li><strong>${f.codigo} – ${f.nombre}</strong>: necesita <strong>${f.cantidad_necesaria} ${f.unidad}</strong>, disponible <strong>${f.stock_disponible}</strong> (faltan <strong>${f.faltante}</strong>)</li>`
-      ).join("");
-      bloqueHTML = `
-        <div class="bloqueo-box">
-          <div class="bloqueo-title">🚫 No se puede despachar — Stock insuficiente</div>
-          <ul>${listaFaltantes}</ul>
-          <p style="margin-top:8px;font-size:12px;color:var(--danger)">Repón el inventario desde la sección de Materiales antes de despachar.</p>
-        </div>`;
-    } else {
-      bloqueHTML = `
-        <div class="aviso-box">
-          ⚠️ Al confirmar la entrega, se descontará el stock de cada material. Esta acción <strong>no se puede deshacer</strong>.
-        </div>`;
-    }
+    let bloqueHTML = hayFaltantes ? `
+      <div class="bloqueo-box">
+        <div class="bloqueo-title">🚫 No se puede despachar — Stock insuficiente</div>
+        <ul>${stockCheck.faltantes.map(f =>
+          `<li><strong>${f.codigo} – ${f.nombre}</strong>: necesita <strong>${f.cantidad_necesaria} ${f.unidad}</strong>, disponible <strong>${f.stock_disponible}</strong> (faltan <strong>${f.faltante}</strong>)</li>`
+        ).join("")}</ul>
+        <p style="margin-top:8px;font-size:12px;color:var(--danger)">Repón el inventario mediante un Pedido de Compra antes de despachar.</p>
+      </div>` : `
+      <div class="aviso-box">
+        ⚠️ Al confirmar la entrega, se descontará el stock de cada material. Esta acción <strong>no se puede deshacer</strong>.
+      </div>`;
 
     body.innerHTML = `
       <div class="form-row" style="margin-bottom:12px">
@@ -205,16 +297,14 @@ async function abrirDespacho(id) {
             </tr>
           </tbody>
         </table>
-      </div>
-    `;
+      </div>`;
 
     footer.innerHTML = `
       <button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>
       ${hayFaltantes
-        ? `<button class="btn btn-danger" disabled title="Stock insuficiente para despachar">🚫 Sin stock suficiente</button>`
+        ? `<button class="btn btn-danger" disabled>🚫 Sin stock suficiente</button>`
         : `<button class="btn btn-success" onclick="confirmarEntrega()">✓ Confirmar Entrega y Descontar Stock</button>`
-      }
-    `;
+      }`;
   } catch (err) {
     body.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
     footer.innerHTML = `<button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>`;
@@ -231,10 +321,205 @@ async function confirmarEntrega() {
     cerrarModal();
     loadAprobadas();
   } catch (err) {
-    // El backend devuelve detalle de qué materiales faltan
     showToast("Error: " + err.message, "error");
     if (btn) { btn.disabled = false; btn.textContent = "✓ Confirmar Entrega y Descontar Stock"; }
   }
+}
+
+// ── PEDIDOS DE COMPRA ─────────────────────────────────────────────────────────
+
+async function loadPedidos() {
+  const tbody = document.getElementById("ped-tbody");
+  tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>`;
+  try {
+    const data = await apiFetch("/api/bodega/pedidos/lista");
+    if (!data.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>No hay pedidos de compra. Crea uno desde el botón "Nuevo Pedido".</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(p => {
+      const resumen = p.items_resumen.map(i =>
+        `${i.material_codigo} × ${i.cantidad_aprobada ?? i.cantidad_solicitada} ${i.unidad}`
+      ).join(", ");
+      const acciones = p.estado === "aprobada"
+        ? `<button class="btn btn-success btn-sm" onclick="abrirRecepcion(${p.id})">Confirmar Recepción</button>`
+        : p.estado === "pendiente"
+          ? `<span class="text-muted text-sm">Esperando aprobación</span>`
+          : "—";
+      return `
+        <tr>
+          <td style="font-weight:600">#${p.id}</td>
+          <td>${fmtDate(p.created_at)}</td>
+          <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${resumen}">${resumen}</td>
+          <td>${p.proveedor}</td>
+          <td style="font-weight:600">${fmtMoney(p.total)}</td>
+          <td>${estadoPedidoBadge(p.estado)}</td>
+          <td>${acciones}</td>
+        </tr>`;
+    }).join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">Error: ${err.message}</td></tr>`;
+  }
+}
+
+function estadoPedidoBadge(estado) {
+  const map = {
+    pendiente: "badge-pendiente",
+    aprobada:  "badge-aprobada",
+    rechazada: "badge-rechazada",
+    recibida:  "badge-entregada",
+  };
+  const labels = { pendiente:"Pendiente", aprobada:"Aprobado", rechazada:"Rechazado", recibida:"Recibido" };
+  return `<span class="badge ${map[estado] || ''}">${labels[estado] || estado}</span>`;
+}
+
+async function abrirNuevoPedido() {
+  document.getElementById("ped-proveedor").value = "";
+  document.getElementById("ped-observaciones").value = "";
+  document.getElementById("ped-items").innerHTML = "";
+  itemPedidoCounter = 0;
+
+  if (!materialesCache.length) {
+    try {
+      materialesCache = await apiFetch("/api/materiales/?activo=true");
+    } catch (err) {
+      showToast("Error cargando materiales: " + err.message, "error");
+      return;
+    }
+  }
+  agregarItemPedido();
+  document.getElementById("modal-pedido").classList.remove("hidden");
+}
+
+function buildMaterialSelectOptions(selectedId) {
+  const grupos = { produccion: [], epps: [], mantenimiento: [] };
+  materialesCache.forEach(m => { if (grupos[m.categoria]) grupos[m.categoria].push(m); });
+  const labels = { produccion: "Producción", epps: "EPPs", mantenimiento: "Mantenimiento" };
+  let html = `<option value="">Seleccionar material...</option>`;
+  for (const [cat, mats] of Object.entries(grupos)) {
+    if (!mats.length) continue;
+    html += `<optgroup label="${labels[cat]}">`;
+    mats.forEach(m => {
+      const sel = m.id == selectedId ? "selected" : "";
+      html += `<option value="${m.id}" ${sel}>${m.codigo} – ${m.nombre} (stock: ${m.stock_actual} ${m.unidad_medida})</option>`;
+    });
+    html += `</optgroup>`;
+  }
+  return html;
+}
+
+function agregarItemPedido(materialIdPreseleccionado) {
+  const id = ++itemPedidoCounter;
+  const div = document.createElement("div");
+  div.className = "item-row";
+  div.id = `ped-item-${id}`;
+  div.innerHTML = `
+    <select class="form-control" id="ped-mat-${id}" style="flex:2">
+      ${buildMaterialSelectOptions(materialIdPreseleccionado)}
+    </select>
+    <input type="number" id="ped-cant-${id}" class="form-control" placeholder="Cantidad" min="0.01" step="0.01" style="flex:1">
+    <button class="btn btn-secondary btn-sm btn-remove" onclick="document.getElementById('ped-item-${id}').remove()">✕</button>`;
+  document.getElementById("ped-items").appendChild(div);
+}
+
+async function guardarPedido() {
+  const items = [];
+  document.querySelectorAll("[id^='ped-item-']").forEach(row => {
+    const idNum = row.id.split("-")[2];
+    const matId = parseInt(document.getElementById(`ped-mat-${idNum}`)?.value);
+    const cant = parseFloat(document.getElementById(`ped-cant-${idNum}`)?.value);
+    if (matId && cant > 0) items.push({ material_id: matId, cantidad: cant });
+  });
+
+  if (!items.length) { showToast("Agrega al menos un material con cantidad válida", "warning"); return; }
+
+  const payload = {
+    proveedor: document.getElementById("ped-proveedor").value || null,
+    observaciones: document.getElementById("ped-observaciones").value || null,
+    items,
+  };
+
+  const btn = document.querySelector("#modal-pedido .btn-primary");
+  btn.disabled = true; btn.textContent = "Enviando...";
+  try {
+    await apiFetch("/api/bodega/pedidos", { method: "POST", body: JSON.stringify(payload) });
+    showToast("Pedido de compra enviado al coordinador", "success");
+    cerrarModalPedido();
+    loadPedidos();
+  } catch (err) {
+    showToast("Error: " + err.message, "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Enviar Pedido";
+  }
+}
+
+function cerrarModalPedido() {
+  document.getElementById("modal-pedido").classList.add("hidden");
+}
+
+async function abrirRecepcion(id) {
+  pedidoActualId = id;
+  document.getElementById("recep-title").textContent = `Confirmar Recepción — Pedido #${id}`;
+  const body = document.getElementById("recep-body");
+  body.innerHTML = "<p class='text-muted'>Cargando...</p>";
+  document.getElementById("modal-recepcion").classList.remove("hidden");
+
+  try {
+    const pedidos = await apiFetch("/api/bodega/pedidos/lista");
+    const p = pedidos.find(x => x.id === id);
+    if (!p) { body.innerHTML = "<p class='text-danger'>Pedido no encontrado</p>"; return; }
+
+    body.innerHTML = `
+      <div class="aviso-box" style="margin-bottom:16px">
+        Al confirmar, el stock de cada material aumentará según la cantidad aprobada por el coordinador.
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="border-bottom:1px solid var(--gray-200)">
+          <th style="text-align:left;padding:6px 8px">Material</th>
+          <th style="text-align:center;padding:6px 8px">Cant. Aprobada</th>
+          <th style="text-align:center;padding:6px 8px">Unidad</th>
+        </tr></thead>
+        <tbody>
+          ${p.items_resumen.map(i => `
+            <tr style="border-bottom:1px solid var(--gray-100)">
+              <td style="padding:6px 8px"><code style="font-size:11px;background:var(--gray-100);padding:2px 5px;border-radius:3px">${i.material_codigo}</code> ${i.material_nombre}</td>
+              <td style="text-align:center;font-weight:700;padding:6px 8px">${i.cantidad_aprobada ?? i.cantidad_solicitada}</td>
+              <td style="text-align:center;padding:6px 8px">${i.unidad}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+      <div class="form-group" style="margin-top:16px">
+        <label class="form-label">Comentario (opcional)</label>
+        <input type="text" id="recep-comentario" class="form-control" placeholder="Ej: Llegaron 50 unidades del proveedor ABC">
+      </div>`;
+  } catch (err) {
+    body.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+  }
+}
+
+async function confirmarRecepcion() {
+  if (!pedidoActualId) return;
+  const btn = document.querySelector("#modal-recepcion .btn-success");
+  btn.disabled = true; btn.textContent = "Procesando...";
+  try {
+    const comentario = document.getElementById("recep-comentario")?.value || null;
+    const res = await apiFetch(`/api/bodega/pedidos/${pedidoActualId}/recibir`, {
+      method: "POST",
+      body: JSON.stringify({ comentario }),
+    });
+    showToast(res.detail, "success");
+    cerrarModalRecepcion();
+    loadPedidos();
+  } catch (err) {
+    showToast("Error: " + err.message, "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Confirmar Recepción y Actualizar Stock";
+  }
+}
+
+function cerrarModalRecepcion() {
+  document.getElementById("modal-recepcion").classList.add("hidden");
+  pedidoActualId = null;
 }
 
 // ── Inicialización ────────────────────────────────────────────────────────────

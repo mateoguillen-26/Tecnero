@@ -36,6 +36,42 @@
   </div>
 </div>
 
+<!-- Modal crear pedido de compra desde alerta -->
+<div class="modal-overlay hidden" id="modal-pedido-alerta">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Crear Pedido de Compra</span>
+      <button class="modal-close" onclick="cerrarModalPedidoAlerta()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted" style="margin-bottom:16px;font-size:13px">
+        Se creará un pedido de compra pendiente de aprobación por el coordinador.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Material</label>
+        <input type="text" id="alerta-mat-nombre" class="form-control" readonly style="background:var(--gray-50)">
+        <input type="hidden" id="alerta-mat-id">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cantidad a pedir</label>
+        <input type="number" id="alerta-cantidad" class="form-control" placeholder="Ej: 50" min="0.01" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Proveedor (opcional)</label>
+        <input type="text" id="alerta-proveedor" class="form-control" placeholder="Nombre del proveedor">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observaciones (opcional)</label>
+        <textarea id="alerta-observaciones" class="form-control" placeholder="Urgencia, detalles, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="cerrarModalPedidoAlerta()">Cancelar</button>
+      <button class="btn btn-primary" onclick="enviarPedidoAlerta()">Enviar Pedido</button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
@@ -46,6 +82,9 @@ async function loadAlertas() {
   const tbody = document.getElementById("alertas-tbody");
   try {
     const data = await apiFetch(`/api/alertas/?solo_activas=${soloActivas}`);
+    const userLocal = getUser();
+    const esBodeguero = userLocal && userLocal.rol === "bodeguero";
+
     if (!data.length) {
       tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>${soloActivas ? "No hay alertas activas. El inventario está en buen estado." : "No hay alertas registradas."}</p></div></td></tr>`;
       return;
@@ -59,8 +98,9 @@ async function loadAlertas() {
         <td>${a.stock_minimo}</td>
         <td><span class="badge ${a.activa ? 'badge-pendiente' : 'badge-entregada'}">${a.activa ? 'Activa' : 'Resuelta'}</span></td>
         <td>${fmtDate(a.created_at)}</td>
-        <td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
           ${a.activa ? `<button class="btn btn-secondary btn-sm" onclick="resolver(${a.id})">Resolver</button>` : "—"}
+          ${a.activa && esBodeguero ? `<button class="btn btn-primary btn-sm" onclick="abrirModalPedidoAlerta(${a.material_id}, '${a.material_nombre.replace(/'/g,"\\'")}')">Pedir</button>` : ""}
         </td>
       </tr>`).join("");
   } catch (err) {
@@ -76,6 +116,47 @@ async function resolver(id) {
     loadAlertas();
   } catch (err) {
     showToast("Error: " + err.message, "error");
+  }
+}
+
+function abrirModalPedidoAlerta(materialId, materialNombre) {
+  document.getElementById("alerta-mat-id").value = materialId;
+  document.getElementById("alerta-mat-nombre").value = materialNombre;
+  document.getElementById("alerta-cantidad").value = "";
+  document.getElementById("alerta-proveedor").value = "";
+  document.getElementById("alerta-observaciones").value = "";
+  document.getElementById("modal-pedido-alerta").classList.remove("hidden");
+}
+
+function cerrarModalPedidoAlerta() {
+  document.getElementById("modal-pedido-alerta").classList.add("hidden");
+}
+
+async function enviarPedidoAlerta() {
+  const matId = parseInt(document.getElementById("alerta-mat-id").value);
+  const cantidad = parseFloat(document.getElementById("alerta-cantidad").value);
+
+  if (!matId || !cantidad || cantidad <= 0) {
+    showToast("Ingresa una cantidad válida", "warning");
+    return;
+  }
+
+  const payload = {
+    proveedor: document.getElementById("alerta-proveedor").value || null,
+    observaciones: document.getElementById("alerta-observaciones").value || null,
+    items: [{ material_id: matId, cantidad }],
+  };
+
+  const btn = document.querySelector("#modal-pedido-alerta .btn-primary");
+  btn.disabled = true; btn.textContent = "Enviando...";
+  try {
+    await apiFetch("/api/bodega/pedidos", { method: "POST", body: JSON.stringify(payload) });
+    showToast("Pedido de compra enviado al coordinador para aprobación", "success");
+    cerrarModalPedidoAlerta();
+  } catch (err) {
+    showToast("Error: " + err.message, "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Enviar Pedido";
   }
 }
 

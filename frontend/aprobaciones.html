@@ -9,6 +9,10 @@
     .stock-ok  { color: var(--success); font-size:12px; font-weight:600; }
     .stock-low { color: var(--warning); font-size:12px; font-weight:600; }
     .stock-err { color: var(--danger);  font-size:12px; font-weight:600; }
+    .tab-nav { display:flex; gap:4px; margin-bottom:20px; border-bottom:2px solid var(--gray-200); padding-bottom:0; }
+    .tab-btn { background:none; border:none; padding:10px 20px; cursor:pointer; font-size:14px; font-weight:500; color:var(--gray-500); border-bottom:2px solid transparent; margin-bottom:-2px; border-radius:4px 4px 0 0; transition:.15s; }
+    .tab-btn:hover { color:var(--primary); background:var(--gray-50); }
+    .tab-btn.active { color:var(--primary); border-bottom-color:var(--primary); font-weight:600; }
   </style>
 </head>
 <body>
@@ -16,19 +20,43 @@
   <div class="sidebar" id="app-sidebar"></div>
   <div class="main-content">
     <div class="topbar">
-      <div><h1>Aprobaciones</h1><div class="breadcrumb">Gestionar solicitudes pendientes de aprobación</div></div>
+      <div><h1>Aprobaciones</h1><div class="breadcrumb">Gestionar solicitudes y pedidos pendientes de aprobación</div></div>
     </div>
     <div class="page-content">
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>#</th><th>Solicitante</th><th>Línea de Producción</th><th>Fecha Req.</th><th>Ítems</th><th>Total Est.</th><th>Recibida</th><th>Acciones</th></tr>
-            </thead>
-            <tbody id="apr-tbody">
-              <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
-            </tbody>
-          </table>
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('requerimientos', this)">Requerimientos de Producción</button>
+        <button class="tab-btn" onclick="switchTab('pedidos', this)">Pedidos de Compra</button>
+      </div>
+
+      <!-- ── TAB REQUERIMIENTOS ─────────────────────────────────────────── -->
+      <div id="tab-requerimientos">
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Solicitante</th><th>Línea de Producción</th><th>Fecha Req.</th><th>Ítems</th><th>Total Est.</th><th>Recibida</th><th>Acciones</th></tr>
+              </thead>
+              <tbody id="req-tbody">
+                <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB PEDIDOS DE COMPRA ──────────────────────────────────────── -->
+      <div id="tab-pedidos" class="hidden">
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Bodeguero</th><th>Proveedor</th><th>Ítems</th><th>Total Est.</th><th>Recibido</th><th>Acciones</th></tr>
+              </thead>
+              <tbody id="ped-tbody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -50,22 +78,29 @@
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-// ── Estado global ─────────────────────────────────────────────────────────────
 let solicitudActual = null;
+let tabActual = "requerimientos";
 
-// ── Funciones globales ────────────────────────────────────────────────────────
+// ── Tabs ──────────────────────────────────────────────────────────────────────
 
-function cerrarModal() {
-  document.getElementById("modal-apr").classList.add("hidden");
-  solicitudActual = null;
+function switchTab(name, btn) {
+  tabActual = name;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("tab-requerimientos").classList.toggle("hidden", name !== "requerimientos");
+  document.getElementById("tab-pedidos").classList.toggle("hidden", name !== "pedidos");
+  if (name === "requerimientos") loadRequerimientos();
+  else loadPedidos();
 }
 
-async function loadPendientes() {
-  const tbody = document.getElementById("apr-tbody");
+// ── REQUERIMIENTOS ────────────────────────────────────────────────────────────
+
+async function loadRequerimientos() {
+  const tbody = document.getElementById("req-tbody");
   try {
-    const data = await apiFetch("/api/aprobaciones/pendientes");
+    const data = await apiFetch("/api/aprobaciones/pendientes?tipo=requerimiento");
     if (!data.length) {
-      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>No hay solicitudes pendientes de aprobación.</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>No hay requerimientos pendientes de aprobación.</p></div></td></tr>`;
       return;
     }
     tbody.innerHTML = data.map(s => `
@@ -77,41 +112,75 @@ async function loadPendientes() {
         <td>${s.num_items}</td>
         <td style="font-weight:600">${fmtMoney(s.total)}</td>
         <td>${fmtDate(s.created_at)}</td>
-        <td><button class="btn btn-primary btn-sm" onclick="abrirAprobacion(${s.id})">Revisar</button></td>
+        <td><button class="btn btn-primary btn-sm" onclick="abrirAprobacion(${s.id}, 'requerimiento')">Revisar</button></td>
       </tr>`).join("");
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center">Error: ${err.message}</td></tr>`;
   }
 }
 
-async function abrirAprobacion(id) {
+// ── PEDIDOS DE COMPRA ─────────────────────────────────────────────────────────
+
+async function loadPedidos() {
+  const tbody = document.getElementById("ped-tbody");
+  try {
+    const data = await apiFetch("/api/aprobaciones/pendientes?tipo=pedido_compra");
+    if (!data.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>No hay pedidos de compra pendientes de aprobación.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(s => `
+      <tr>
+        <td style="font-weight:600">#${s.id}</td>
+        <td>${s.solicitante_nombre}</td>
+        <td>${s.proveedor || "—"}</td>
+        <td>${s.num_items}</td>
+        <td style="font-weight:600">${fmtMoney(s.total)}</td>
+        <td>${fmtDate(s.created_at)}</td>
+        <td><button class="btn btn-primary btn-sm" onclick="abrirAprobacion(${s.id}, 'pedido_compra')">Revisar</button></td>
+      </tr>`).join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">Error: ${err.message}</td></tr>`;
+  }
+}
+
+// ── MODAL APROBACIÓN (compartido) ─────────────────────────────────────────────
+
+function cerrarModal() {
+  document.getElementById("modal-apr").classList.add("hidden");
+  solicitudActual = null;
+}
+
+async function abrirAprobacion(id, tipo) {
   const body = document.getElementById("modal-body");
   body.innerHTML = "<p class='text-muted'>Cargando...</p>";
   document.getElementById("modal-footer").innerHTML = "";
   document.getElementById("modal-apr").classList.remove("hidden");
+
   try {
     const s = await apiFetch(`/api/solicitudes/${id}`);
     solicitudActual = s;
-    document.getElementById("modal-title").textContent = `Solicitud #${s.id} – ${s.solicitante_nombre}`;
+    const esPedido = tipo === "pedido_compra";
+    document.getElementById("modal-title").textContent = esPedido
+      ? `Pedido de Compra #${s.id} — ${s.solicitante_nombre}`
+      : `Solicitud #${s.id} — ${s.solicitante_nombre}`;
 
-    // Construir filas con indicador de stock actual
     const filasDetalles = s.detalles.map(d => {
-      const stockAct = d.material_stock_actual ?? null;
       let stockInfo = "";
-      if (stockAct !== null) {
-        if (stockAct <= 0) {
-          stockInfo = `<div class="stock-err">Sin stock (${stockAct})</div>`;
-        } else if (stockAct < d.cantidad_solicitada) {
-          stockInfo = `<div class="stock-low">Stock bajo: ${stockAct} ${d.material_unidad}</div>`;
-        } else {
-          stockInfo = `<div class="stock-ok">Stock OK: ${stockAct} ${d.material_unidad}</div>`;
+      if (!esPedido) {
+        const stockAct = d.material_stock_actual ?? null;
+        if (stockAct !== null) {
+          if (stockAct <= 0)
+            stockInfo = `<div class="stock-err">Sin stock (${stockAct})</div>`;
+          else if (stockAct < d.cantidad_solicitada)
+            stockInfo = `<div class="stock-low">Stock bajo: ${stockAct} ${d.material_unidad}</div>`;
+          else
+            stockInfo = `<div class="stock-ok">Stock OK: ${stockAct} ${d.material_unidad}</div>`;
         }
       }
       return `
         <tr>
-          <td>
-            <code style="font-size:11px;background:var(--gray-100);padding:2px 5px;border-radius:3px">${d.material_codigo || "—"}</code>
-          </td>
+          <td><code style="font-size:11px;background:var(--gray-100);padding:2px 5px;border-radius:3px">${d.material_codigo || "—"}</code></td>
           <td>${d.material_nombre} <span class="text-muted text-sm">(${d.material_unidad})</span>${stockInfo}</td>
           <td>${d.cantidad_solicitada}</td>
           <td>
@@ -125,15 +194,22 @@ async function abrirAprobacion(id) {
     }).join("");
 
     body.innerHTML = `
-      <div class="form-row" style="margin-bottom:12px">
-        <div><div class="form-label">Línea de Producción</div><p>${s.linea_produccion_nombre}</p></div>
-        <div><div class="form-label">Fecha Requerida</div><p>${fmtDate(s.fecha_requerida)}</p></div>
-      </div>
-      ${s.observaciones ? `<div class="form-group"><div class="form-label">Observaciones del solicitante</div><p style="color:#374151">${s.observaciones}</p></div>` : ""}
+      ${esPedido ? `
+        <div class="form-row" style="margin-bottom:12px">
+          <div><div class="form-label">Proveedor</div><p>${s.proveedor || "—"}</p></div>
+          <div><div class="form-label">Creado por</div><p>${s.solicitante_nombre}</p></div>
+        </div>` : `
+        <div class="form-row" style="margin-bottom:12px">
+          <div><div class="form-label">Línea de Producción</div><p>${s.linea_produccion_nombre}</p></div>
+          <div><div class="form-label">Fecha Requerida</div><p>${fmtDate(s.fecha_requerida)}</p></div>
+        </div>`}
+      ${s.observaciones ? `<div class="form-group"><div class="form-label">Observaciones</div><p style="color:#374151">${s.observaciones}</p></div>` : ""}
       <hr class="divider">
       <div class="form-label" style="margin-bottom:8px">
         Materiales
-        <span class="text-muted" style="font-weight:400;font-size:12px;margin-left:8px">— ajusta cantidades aprobadas si es necesario. La columna "Stock actual" es informativa.</span>
+        <span class="text-muted" style="font-weight:400;font-size:12px;margin-left:8px">
+          ${esPedido ? "— ajusta la cantidad a aprobar si es necesario." : "— ajusta cantidades aprobadas si es necesario. Stock actual es informativo."}
+        </span>
       </div>
       <div class="table-wrap">
         <table>
@@ -147,14 +223,12 @@ async function abrirAprobacion(id) {
       <div class="form-group">
         <label class="form-label">Comentario (opcional)</label>
         <textarea id="comentario-apr" class="form-control" placeholder="Motivo de aprobación, ajuste o rechazo..."></textarea>
-      </div>
-    `;
+      </div>`;
 
     document.getElementById("modal-footer").innerHTML = `
       <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
       <button class="btn btn-danger" onclick="procesar('rechazar')">Rechazar</button>
-      <button class="btn btn-success" onclick="procesar('aprobar')">Aprobar</button>
-    `;
+      <button class="btn btn-success" onclick="procesar('aprobar')">Aprobar</button>`;
   } catch (err) {
     body.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
   }
@@ -181,15 +255,14 @@ async function procesar(accion) {
       method: "POST",
       body: JSON.stringify({ accion, comentario, items }),
     });
-
-    // Mostrar advertencias de stock si las hay
     if (res.advertencia) {
       showToast(res.advertencia, "warning", 6000);
     } else {
-      showToast(`Solicitud ${accion === "aprobar" ? "aprobada" : "rechazada"} correctamente`, "success");
+      showToast(`${accion === "aprobar" ? "Aprobado" : "Rechazado"} correctamente`, "success");
     }
     cerrarModal();
-    loadPendientes();
+    if (tabActual === "requerimientos") loadRequerimientos();
+    else loadPedidos();
   } catch (err) {
     showToast("Error: " + err.message, "error");
   }
@@ -199,7 +272,7 @@ async function procesar(accion) {
 const user = requireAuth(["coordinador"]);
 if (user) {
   renderSidebar("aprobaciones");
-  loadPendientes();
+  loadRequerimientos();
 }
 </script>
 </body>
