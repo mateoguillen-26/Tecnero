@@ -25,6 +25,7 @@ def _build_solicitud_out(solicitud: models.Solicitud) -> dict:
             "cantidad_aprobada": d.cantidad_aprobada,
             "precio_unitario_snapshot": d.precio_unitario_snapshot,
             "subtotal": subtotal,
+            "material_stock_actual": d.material.stock_actual if d.material else None,
         })
     return {
         "id": solicitud.id,

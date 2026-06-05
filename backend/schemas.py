@@ -164,6 +164,7 @@ class DetalleOut(BaseModel):
     cantidad_aprobada: Optional[float]
     precio_unitario_snapshot: float
     subtotal: float
+    material_stock_actual: Optional[float] = None  # stock al momento de consultar
 
     model_config = {"from_attributes": True}
 

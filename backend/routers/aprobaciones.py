@@ -83,4 +83,25 @@ def procesar_aprobacion(
     db.add(historial)
     db.commit()
 
-    return {"detail": f"Solicitud {solicitud.estado} correctamente", "estado": solicitud.estado}
+    # Advertencias de stock (informativas, no bloquean la aprobación)
+    avisos_stock = []
+    if solicitud.estado == "aprobada":
+        for detalle in solicitud.detalles:
+            cant = detalle.cantidad_aprobada or 0
+            if cant <= 0:
+                continue
+            material = db.query(models.Material).filter(models.Material.id == detalle.material_id).first()
+            if material and material.stock_actual < cant:
+                avisos_stock.append(
+                    f"{material.codigo} {material.nombre}: stock actual {material.stock_actual} {material.unidad_medida} "
+                    f"(aprobado {cant})"
+                )
+
+    respuesta = {"detail": f"Solicitud {solicitud.estado} correctamente", "estado": solicitud.estado}
+    if avisos_stock:
+        respuesta["avisos_stock"] = avisos_stock
+        respuesta["advertencia"] = (
+            f"Atención: {len(avisos_stock)} material(es) con stock insuficiente al momento de aprobar. "
+            "El bodeguero no podrá despachar hasta que haya stock disponible."
+        )
+    return respuesta
