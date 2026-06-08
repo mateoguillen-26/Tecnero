@@ -41,7 +41,8 @@ def get_aprobadas(
     current_user: models.Usuario = Depends(require_roles("bodeguero")),
 ):
     solicitudes = db.query(models.Solicitud).filter(
-        models.Solicitud.estado == "aprobada"
+        models.Solicitud.estado == "aprobada",
+        models.Solicitud.tipo == "requerimiento",
     ).order_by(models.Solicitud.updated_at).all()
 
     result = []

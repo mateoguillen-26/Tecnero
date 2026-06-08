@@ -4,7 +4,6 @@ Ejecutar desde la carpeta backend/: python seed.py
 """
 import sys
 import os
-import datetime
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -17,13 +16,9 @@ models.Base.metadata.drop_all(bind=engine)
 models.Base.metadata.create_all(bind=engine)
 
 
-def dias(n):
-    return datetime.datetime.utcnow() + datetime.timedelta(days=n)
-
-
 def seed():
     db = SessionLocal()
-    print("Tablas recreadas. Insertando datos de prueba...")
+    print("Tablas recreadas. Insertando datos base...")
 
     # ─── Lineas de produccion ─────────────────────────────────────────────────
     lineas_nombres = [
@@ -163,106 +158,10 @@ def seed():
     db.flush()
     print(f"  OK {len(usuarios)} usuarios creados")
 
-    solicitante, coordinador, bodeguero = usuarios[0], usuarios[1], usuarios[2]
-
-    # Helper para buscar material por codigo
-    def mat(codigo):
-        return next((m for m in materiales if m.codigo == codigo), None)
-
-    # ─── Solicitudes de ejemplo ───────────────────────────────────────────────
-
-    # 1. Solicitud ENTREGADA – Fabricacion de cilindro (mes actual)
-    s1 = models.Solicitud(
-        solicitante_id=solicitante.id, linea_produccion_id=lineas[0].id,
-        tipo="requerimiento", estado="entregada", observaciones="Lote de produccion mensual",
-        fecha_requerida=dias(0), created_at=dias(-3), updated_at=dias(-1),
-    )
-    db.add(s1); db.flush()
-    for codigo, cant_sol, cant_apr in [
-        ("M-MAPI-001", 20.0, 20.0),
-        ("M-MAPI-009", 10.0, 10.0),
-        ("M-MAPI-011", 50.0, 50.0),
-    ]:
-        m_obj = mat(codigo)
-        if m_obj:
-            db.add(models.DetalleSolicitud(solicitud_id=s1.id, material_id=m_obj.id,
-                cantidad_solicitada=cant_sol, cantidad_aprobada=cant_apr,
-                precio_unitario_snapshot=m_obj.precio_unitario))
-    db.add(models.HistorialEstados(solicitud_id=s1.id, estado_anterior=None,       estado_nuevo="pendiente",  usuario_id=solicitante.id, comentario="Solicitud creada",                    created_at=dias(-3)))
-    db.add(models.HistorialEstados(solicitud_id=s1.id, estado_anterior="pendiente", estado_nuevo="aprobada",   usuario_id=coordinador.id, comentario="Aprobado para lote mensual",          created_at=dias(-2)))
-    db.add(models.HistorialEstados(solicitud_id=s1.id, estado_anterior="aprobada",  estado_nuevo="entregada",  usuario_id=bodeguero.id,   comentario="Materiales entregados desde bodega",  created_at=dias(-1)))
-
-    # 2. Solicitud APROBADA – Reparacion de cilindro (mes actual)
-    s2 = models.Solicitud(
-        solicitante_id=solicitante.id, linea_produccion_id=lineas[1].id,
-        tipo="requerimiento", estado="aprobada", observaciones="Reparacion urgente de 10 cilindros",
-        fecha_requerida=dias(2), created_at=dias(-2), updated_at=dias(-1),
-    )
-    db.add(s2); db.flush()
-    for codigo, cant_sol, cant_apr in [
-        ("M-MAPI-051", 10.0, 8.0),
-        ("M-MAPI-009", 5.0,  4.0),
-        ("M-MAPI-008", 2.0,  2.0),
-    ]:
-        m_obj = mat(codigo)
-        if m_obj:
-            db.add(models.DetalleSolicitud(solicitud_id=s2.id, material_id=m_obj.id,
-                cantidad_solicitada=cant_sol, cantidad_aprobada=cant_apr,
-                precio_unitario_snapshot=m_obj.precio_unitario))
-    db.add(models.HistorialEstados(solicitud_id=s2.id, estado_anterior=None,       estado_nuevo="pendiente", usuario_id=solicitante.id, comentario="Solicitud creada",              created_at=dias(-2)))
-    db.add(models.HistorialEstados(solicitud_id=s2.id, estado_anterior="pendiente", estado_nuevo="aprobada",  usuario_id=coordinador.id, comentario="Aprobado con ajuste en discos", created_at=dias(-1)))
-
-    # 3. Solicitud PENDIENTE – Fabricacion de asas
-    s3 = models.Solicitud(
-        solicitante_id=solicitante.id, linea_produccion_id=lineas[2].id,
-        tipo="requerimiento", estado="pendiente", observaciones="Pedido para 200 asas",
-        fecha_requerida=dias(5), created_at=dias(-1), updated_at=dias(-1),
-    )
-    db.add(s3); db.flush()
-    for codigo, cant_sol in [("M-MAPD-014", 30.0), ("M-MAPI-051", 20.0)]:
-        m_obj = mat(codigo)
-        if m_obj:
-            db.add(models.DetalleSolicitud(solicitud_id=s3.id, material_id=m_obj.id,
-                cantidad_solicitada=cant_sol,
-                precio_unitario_snapshot=m_obj.precio_unitario))
-    db.add(models.HistorialEstados(solicitud_id=s3.id, estado_anterior=None, estado_nuevo="pendiente", usuario_id=solicitante.id, comentario="Solicitud creada", created_at=dias(-1)))
-
-    # 4. Solicitud RECHAZADA – Fabricacion de bases
-    s4 = models.Solicitud(
-        solicitante_id=solicitante.id, linea_produccion_id=lineas[3].id,
-        tipo="requerimiento", estado="rechazada", observaciones="Bases para siguiente lote",
-        fecha_requerida=dias(-2), created_at=dias(-5), updated_at=dias(-4),
-    )
-    db.add(s4); db.flush()
-    for codigo, cant_sol in [("M-MAPD-015", 40.0), ('M-MAPI-052', 15.0)]:
-        m_obj = mat(codigo)
-        if m_obj:
-            db.add(models.DetalleSolicitud(solicitud_id=s4.id, material_id=m_obj.id,
-                cantidad_solicitada=cant_sol,
-                precio_unitario_snapshot=m_obj.precio_unitario))
-    db.add(models.HistorialEstados(solicitud_id=s4.id, estado_anterior=None,       estado_nuevo="pendiente",  usuario_id=solicitante.id, comentario="Solicitud creada",                            created_at=dias(-5)))
-    db.add(models.HistorialEstados(solicitud_id=s4.id, estado_anterior="pendiente", estado_nuevo="rechazada", usuario_id=coordinador.id, comentario="Excede presupuesto del periodo.",              created_at=dias(-4)))
-
-    # 5. Solicitud PENDIENTE – Reparacion de valvulas
-    s5 = models.Solicitud(
-        solicitante_id=solicitante.id, linea_produccion_id=lineas[4].id,
-        tipo="requerimiento", estado="pendiente", observaciones="Reparacion de valvulas defectuosas",
-        fecha_requerida=dias(3), created_at=datetime.datetime.utcnow(), updated_at=datetime.datetime.utcnow(),
-    )
-    db.add(s5); db.flush()
-    for codigo, cant_sol in [("M-MAPI-064", 5.0), ("M-MAPI-068", 3.0)]:
-        m_obj = mat(codigo)
-        if m_obj:
-            db.add(models.DetalleSolicitud(solicitud_id=s5.id, material_id=m_obj.id,
-                cantidad_solicitada=cant_sol,
-                precio_unitario_snapshot=m_obj.precio_unitario))
-    db.add(models.HistorialEstados(solicitud_id=s5.id, estado_anterior=None, estado_nuevo="pendiente", usuario_id=solicitante.id, comentario="Solicitud creada", created_at=datetime.datetime.utcnow()))
-
     db.commit()
-    print("  OK 5 solicitudes de ejemplo (entregada, aprobada, 2x pendiente, rechazada)")
 
     print("\n" + "="*55)
-    print("  Seed completado exitosamente")
+    print("  Base de datos lista para pruebas")
     print("="*55)
     print("\n  Usuarios de prueba:")
     print("  Email                           | Rol")

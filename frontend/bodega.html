@@ -83,10 +83,10 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th>#</th><th>Fecha</th><th>Materiales</th><th>Proveedor</th><th>Total Est.</th><th>Estado</th><th>Acciones</th></tr>
+                <tr><th>#</th><th>Fecha</th><th>Materiales</th><th>Proveedor</th><th>Total Est.</th><th>Estado</th></tr>
               </thead>
               <tbody id="ped-tbody">
-                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
+                <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Cargando...</td></tr>
               </tbody>
             </table>
           </div>
@@ -136,26 +136,11 @@
   </div>
 </div>
 
-<!-- Modal confirmar recepción -->
-<div class="modal-overlay hidden" id="modal-recepcion">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title" id="recep-title">Confirmar Recepción</span>
-      <button class="modal-close" onclick="cerrarModalRecepcion()">✕</button>
-    </div>
-    <div class="modal-body" id="recep-body"></div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="cerrarModalRecepcion()">Cancelar</button>
-      <button class="btn btn-success" onclick="confirmarRecepcion()">Confirmar Recepción y Actualizar Stock</button>
-    </div>
-  </div>
-</div>
 
 <script src="/js/api.js?v=3"></script>
 <script src="/js/sidebar.js?v=3"></script>
 <script>
 let solicitudActual = null;
-let pedidoActualId = null;
 let materialesCache = [];
 let itemPedidoCounter = 0;
 
@@ -334,18 +319,13 @@ async function loadPedidos() {
   try {
     const data = await apiFetch("/api/bodega/pedidos/lista");
     if (!data.length) {
-      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>No hay pedidos de compra. Crea uno desde el botón "Nuevo Pedido".</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><p>No hay pedidos de compra. Crea uno desde el botón "Nuevo Pedido".</p></div></td></tr>`;
       return;
     }
     tbody.innerHTML = data.map(p => {
       const resumen = p.items_resumen.map(i =>
-        `${i.material_codigo} × ${i.cantidad_aprobada ?? i.cantidad_solicitada} ${i.unidad}`
+        `${i.material_codigo} × ${i.cantidad_solicitada} ${i.unidad}`
       ).join(", ");
-      const acciones = p.estado === "aprobada"
-        ? `<button class="btn btn-success btn-sm" onclick="abrirRecepcion(${p.id})">Confirmar Recepción</button>`
-        : p.estado === "pendiente"
-          ? `<span class="text-muted text-sm">Esperando aprobación</span>`
-          : "—";
       return `
         <tr>
           <td style="font-weight:600">#${p.id}</td>
@@ -354,11 +334,10 @@ async function loadPedidos() {
           <td>${p.proveedor}</td>
           <td style="font-weight:600">${fmtMoney(p.total)}</td>
           <td>${estadoPedidoBadge(p.estado)}</td>
-          <td>${acciones}</td>
         </tr>`;
     }).join("");
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">Error: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">Error: ${err.message}</td></tr>`;
   }
 }
 
@@ -455,71 +434,6 @@ async function guardarPedido() {
 
 function cerrarModalPedido() {
   document.getElementById("modal-pedido").classList.add("hidden");
-}
-
-async function abrirRecepcion(id) {
-  pedidoActualId = id;
-  document.getElementById("recep-title").textContent = `Confirmar Recepción — Pedido #${id}`;
-  const body = document.getElementById("recep-body");
-  body.innerHTML = "<p class='text-muted'>Cargando...</p>";
-  document.getElementById("modal-recepcion").classList.remove("hidden");
-
-  try {
-    const pedidos = await apiFetch("/api/bodega/pedidos/lista");
-    const p = pedidos.find(x => x.id === id);
-    if (!p) { body.innerHTML = "<p class='text-danger'>Pedido no encontrado</p>"; return; }
-
-    body.innerHTML = `
-      <div class="aviso-box" style="margin-bottom:16px">
-        Al confirmar, el stock de cada material aumentará según la cantidad aprobada por el coordinador.
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="border-bottom:1px solid var(--gray-200)">
-          <th style="text-align:left;padding:6px 8px">Material</th>
-          <th style="text-align:center;padding:6px 8px">Cant. Aprobada</th>
-          <th style="text-align:center;padding:6px 8px">Unidad</th>
-        </tr></thead>
-        <tbody>
-          ${p.items_resumen.map(i => `
-            <tr style="border-bottom:1px solid var(--gray-100)">
-              <td style="padding:6px 8px"><code style="font-size:11px;background:var(--gray-100);padding:2px 5px;border-radius:3px">${i.material_codigo}</code> ${i.material_nombre}</td>
-              <td style="text-align:center;font-weight:700;padding:6px 8px">${i.cantidad_aprobada ?? i.cantidad_solicitada}</td>
-              <td style="text-align:center;padding:6px 8px">${i.unidad}</td>
-            </tr>`).join("")}
-        </tbody>
-      </table>
-      <div class="form-group" style="margin-top:16px">
-        <label class="form-label">Comentario (opcional)</label>
-        <input type="text" id="recep-comentario" class="form-control" placeholder="Ej: Llegaron 50 unidades del proveedor ABC">
-      </div>`;
-  } catch (err) {
-    body.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
-  }
-}
-
-async function confirmarRecepcion() {
-  if (!pedidoActualId) return;
-  const btn = document.querySelector("#modal-recepcion .btn-success");
-  btn.disabled = true; btn.textContent = "Procesando...";
-  try {
-    const comentario = document.getElementById("recep-comentario")?.value || null;
-    const res = await apiFetch(`/api/bodega/pedidos/${pedidoActualId}/recibir`, {
-      method: "POST",
-      body: JSON.stringify({ comentario }),
-    });
-    showToast(res.detail, "success");
-    cerrarModalRecepcion();
-    loadPedidos();
-  } catch (err) {
-    showToast("Error: " + err.message, "error");
-  } finally {
-    btn.disabled = false; btn.textContent = "Confirmar Recepción y Actualizar Stock";
-  }
-}
-
-function cerrarModalRecepcion() {
-  document.getElementById("modal-recepcion").classList.add("hidden");
-  pedidoActualId = null;
 }
 
 // ── Inicialización ────────────────────────────────────────────────────────────

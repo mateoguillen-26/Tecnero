@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from auth import require_roles
+from routers.materiales import verificar_y_crear_alerta
 import models
 import schemas
 
@@ -58,22 +59,31 @@ def procesar_aprobacion(
         comentario = data.comentario or "Solicitud rechazada"
 
     elif data.accion == "aprobar":
-        solicitud.estado = "aprobada"
-        comentario = data.comentario or "Solicitud aprobada"
-
-        # Actualizar cantidades aprobadas si se proporcionaron
+        # Actualizar cantidades aprobadas (común a ambos tipos)
         if data.items:
             items_map = {item.detalle_id: item.cantidad_aprobada for item in data.items}
             for detalle in solicitud.detalles:
-                if detalle.id in items_map:
-                    detalle.cantidad_aprobada = items_map[detalle.id]
-                else:
-                    # Si no se especificó, aprobar la cantidad solicitada completa
-                    detalle.cantidad_aprobada = detalle.cantidad_solicitada
+                detalle.cantidad_aprobada = items_map.get(detalle.id, detalle.cantidad_solicitada)
         else:
-            # Sin lista de items: aprobar todas las cantidades solicitadas
             for detalle in solicitud.detalles:
                 detalle.cantidad_aprobada = detalle.cantidad_solicitada
+
+        if solicitud.tipo == "pedido_compra":
+            # Pedido de compra: aumentar stock inmediatamente → no pasa por el bodeguero
+            solicitud.estado = "recibida"
+            comentario = data.comentario or "Pedido de compra aprobado — stock actualizado"
+            for detalle in solicitud.detalles:
+                cant = detalle.cantidad_aprobada or 0
+                if cant <= 0:
+                    continue
+                material = db.query(models.Material).filter(models.Material.id == detalle.material_id).first()
+                if material:
+                    material.stock_actual = round(material.stock_actual + cant, 4)
+                    material.updated_at = datetime.datetime.utcnow()
+        else:
+            # Requerimiento de producción: flujo normal, bodeguero despacha
+            solicitud.estado = "aprobada"
+            comentario = data.comentario or "Solicitud aprobada"
 
     solicitud.updated_at = datetime.datetime.utcnow()
 
@@ -87,7 +97,18 @@ def procesar_aprobacion(
     db.add(historial)
     db.commit()
 
-    # Advertencias de stock (informativas, no bloquean la aprobación)
+    # Post-commit: alertas y advertencias según tipo
+    if solicitud.tipo == "pedido_compra" and solicitud.estado == "recibida":
+        # Verificar alertas tras aumento de stock (puede desactivarlas si ya hay suficiente)
+        materiales_ids = [d.material_id for d in solicitud.detalles]
+        for mid in materiales_ids:
+            mat = db.query(models.Material).filter(models.Material.id == mid).first()
+            if mat:
+                db.refresh(mat)
+                verificar_y_crear_alerta(db, mat)
+        return {"detail": "Pedido de compra aprobado y stock actualizado correctamente", "estado": solicitud.estado}
+
+    # Advertencias de stock para requerimientos (informativas, no bloquean)
     avisos_stock = []
     if solicitud.estado == "aprobada":
         for detalle in solicitud.detalles:
