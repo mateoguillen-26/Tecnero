@@ -32,12 +32,14 @@ def get_dashboard(
 
     # ─── KPIs ────────────────────────────────────────────────────────────────
     total_sol_mes = db.query(models.Solicitud).filter(
+        models.Solicitud.tipo == "requerimiento",
         models.Solicitud.created_at >= inicio,
         models.Solicitud.created_at <= fin,
     ).count()
 
-    # Monto total del mes (solicitudes aprobadas + entregadas)
+    # Monto total del mes (requerimientos aprobados + entregados)
     solicitudes_mes = db.query(models.Solicitud).filter(
+        models.Solicitud.tipo == "requerimiento",
         models.Solicitud.created_at >= inicio,
         models.Solicitud.created_at <= fin,
         models.Solicitud.estado.in_(["aprobada", "entregada"]),
@@ -50,13 +52,15 @@ def get_dashboard(
             monto_mes += qty * d.precio_unitario_snapshot
 
     sol_pendientes = db.query(models.Solicitud).filter(
-        models.Solicitud.estado == "pendiente"
+        models.Solicitud.tipo == "requerimiento",
+        models.Solicitud.estado == "pendiente",
     ).count()
 
     alertas_activas_count = db.query(models.Alerta).filter(models.Alerta.activa == True).count()
 
     # ─── Gasto por línea de producción ───────────────────────────────────────
     solicitudes_rango = db.query(models.Solicitud).filter(
+        models.Solicitud.tipo == "requerimiento",
         models.Solicitud.created_at >= inicio,
         models.Solicitud.created_at <= fin,
         models.Solicitud.estado.in_(["aprobada", "entregada"]),

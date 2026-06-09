@@ -20,7 +20,6 @@
         <input type="date" id="fecha-inicio" class="form-control" style="width:140px">
         <span style="color:#6b7280;font-size:13px">hasta</span>
         <input type="date" id="fecha-fin" class="form-control" style="width:140px">
-        <button class="btn btn-secondary btn-sm" id="btn-filtrar">Filtrar</button>
         <button class="btn btn-secondary btn-sm" id="btn-reset">Este mes</button>
       </div>
     </div>
@@ -79,13 +78,15 @@ if (user) {
   renderSidebar("dashboard");
   let chartLineas = null, chartMat = null;
 
+  function fmtLocalDate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+
   function getDefaultDates() {
     const now = new Date();
     const inicio = new Date(now.getFullYear(), now.getMonth(), 1);
-    return {
-      inicio: inicio.toISOString().split("T")[0],
-      fin: now.toISOString().split("T")[0],
-    };
+    const fin   = new Date(now.getFullYear(), now.getMonth() + 1, 0); // último día del mes
+    return { inicio: fmtLocalDate(inicio), fin: fmtLocalDate(fin) };
   }
 
   async function loadDashboard() {
@@ -183,7 +184,8 @@ if (user) {
   document.getElementById("fecha-inicio").value = defaults.inicio;
   document.getElementById("fecha-fin").value = defaults.fin;
 
-  document.getElementById("btn-filtrar").addEventListener("click", loadDashboard);
+  document.getElementById("fecha-inicio").addEventListener("change", loadDashboard);
+  document.getElementById("fecha-fin").addEventListener("change", loadDashboard);
   document.getElementById("btn-reset").addEventListener("click", () => {
     const d = getDefaultDates();
     document.getElementById("fecha-inicio").value = d.inicio;

@@ -53,7 +53,7 @@
         <input type="hidden" id="alerta-mat-id">
       </div>
       <div class="form-group">
-        <label class="form-label">Cantidad a pedir</label>
+        <label class="form-label">Cantidad a pedir <span id="alerta-cantidad-hint" style="font-weight:400;color:var(--gray-500);font-size:12px"></span></label>
         <input type="number" id="alerta-cantidad" class="form-control" placeholder="Ej: 50" min="0.01" step="0.01">
       </div>
       <div class="form-group">
@@ -100,7 +100,7 @@ async function loadAlertas() {
         <td>${fmtDate(a.created_at)}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap">
           ${a.activa ? `<button class="btn btn-secondary btn-sm" onclick="resolver(${a.id})">Resolver</button>` : "—"}
-          ${a.activa && esBodeguero ? `<button class="btn btn-primary btn-sm" onclick="abrirModalPedidoAlerta(${a.material_id}, '${a.material_nombre.replace(/'/g,"\\'")}')">Pedir</button>` : ""}
+          ${a.activa && esBodeguero ? `<button class="btn btn-primary btn-sm" onclick="abrirModalPedidoAlerta(${a.material_id}, '${a.material_nombre.replace(/'/g,"\\'")}', ${Math.max(0, a.stock_minimo - a.stock_actual)})">Pedir</button>` : ""}
         </td>
       </tr>`).join("");
   } catch (err) {
@@ -119,10 +119,11 @@ async function resolver(id) {
   }
 }
 
-function abrirModalPedidoAlerta(materialId, materialNombre) {
+function abrirModalPedidoAlerta(materialId, materialNombre, cantidadSugerida) {
   document.getElementById("alerta-mat-id").value = materialId;
   document.getElementById("alerta-mat-nombre").value = materialNombre;
-  document.getElementById("alerta-cantidad").value = "";
+  document.getElementById("alerta-cantidad").value = cantidadSugerida > 0 ? cantidadSugerida : "";
+  document.getElementById("alerta-cantidad-hint").textContent = cantidadSugerida > 0 ? `(sugerido: ${cantidadSugerida} para alcanzar stock mínimo)` : "";
   document.getElementById("alerta-proveedor").value = "";
   document.getElementById("alerta-observaciones").value = "";
   document.getElementById("modal-pedido-alerta").classList.remove("hidden");
