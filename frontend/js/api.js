@@ -114,6 +114,17 @@ function initSidebar(activePage) {
     if (!roles.includes(user.rol)) el.style.display = "none";
   });
 
+  // Badge de alertas activas (solo para roles que ven alertas)
+  if (user.rol === "coordinador" || user.rol === "bodeguero") {
+    apiFetch("/api/alertas/?solo_activas=true").then(data => {
+      const badge = document.getElementById("alertas-badge");
+      if (badge && data && data.length > 0) {
+        badge.textContent = data.length > 99 ? "99+" : data.length;
+        badge.style.display = "inline-flex";
+      }
+    }).catch(() => {});
+  }
+
   // Logout
   document.getElementById("btn-logout")?.addEventListener("click", () => {
     localStorage.clear();
